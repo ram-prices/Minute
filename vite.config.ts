@@ -13,9 +13,12 @@ export default defineConfig(({mode}) => {
       react(), 
       tailwindcss(),
       VitePWA({
+        strategies: 'injectManifest',
+        srcDir: 'src',
+        filename: 'sw.ts',
         registerType: 'autoUpdate',
         injectRegister: 'auto',
-        includeAssets: ['icon.svg'],
+        includeAssets: [],
         workbox: {
           globPatterns: ['**/*.{js,css,html,ico,png,svg}']
         },
