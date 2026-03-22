@@ -23,30 +23,33 @@ export default defineConfig(({mode}) => {
           name: 'Minute',
           short_name: 'Minute',
           description: 'A high-performance Reddit client.',
-          theme_color: '#000000',
-          background_color: '#ffffff',
+          theme_color: '#030303',
+          background_color: '#030303',
           display: 'standalone',
           start_url: '/',
           icons: [
             {
-              src: 'https://api.dicebear.com/7.x/initials/png?seed=C&backgroundColor=000000&size=192',
+              src: 'https://api.dicebear.com/7.x/initials/png?seed=M&backgroundColor=000000&size=192',
               sizes: '192x192',
               type: 'image/png',
               purpose: 'any'
             },
             {
-              src: 'https://api.dicebear.com/7.x/initials/png?seed=C&backgroundColor=000000&size=512',
+              src: 'https://api.dicebear.com/7.x/initials/png?seed=M&backgroundColor=000000&size=512',
               sizes: '512x512',
               type: 'image/png',
               purpose: 'any'
             },
             {
-              src: 'https://api.dicebear.com/7.x/initials/png?seed=C&backgroundColor=000000&size=512',
+              src: 'https://api.dicebear.com/7.x/initials/png?seed=M&backgroundColor=000000&size=512',
               sizes: '512x512',
               type: 'image/png',
               purpose: 'maskable'
             }
           ]
+        },
+        devOptions: {
+          enabled: true
         }
       })
     ],

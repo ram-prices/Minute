@@ -7,6 +7,11 @@
 }
 
 @layer base {
+  html, body, #root {
+    height: 100%;
+    min-height: 100%;
+    min-height: -webkit-fill-available;
+  }
   body {
     @apply bg-[#030303] text-[#D7DADC] font-sans antialiased;
   }
@@ -25,6 +30,29 @@
   img.no-callout {
     pointer-events: none;
     -webkit-user-drag: none;
+  }
+  .reddit-emoji {
+    height: 1.25em;
+    display: inline-block;
+    vertical-align: middle;
+    margin: 0 1px;
+    object-fit: contain;
+  }
+  .social-embed-content blockquote {
+    margin: 0;
+    padding: 0;
+    border: none;
+    font-style: normal;
+  }
+  .social-embed-content blockquote p {
+    margin-bottom: 0.5rem;
+  }
+  .social-embed-content blockquote a {
+    color: #3b82f6;
+    text-decoration: none;
+  }
+  .social-embed-content blockquote a:hover {
+    text-decoration: underline;
   }
 }
 

@@ -4,12 +4,79 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { RedditPost, RedditComment, fetchPostDetails, getStreamableId } from '../services/reddit';
-import { X, ArrowLeft, MessageSquare, ArrowUp, Clock, User, MoreVertical, Trash2 } from 'lucide-react';
+import { RedditPost, RedditComment, fetchPostDetails, getStreamableId, getTwitterId, getBlueskyId } from '../services/reddit';
+import { X, ArrowLeft, MessageSquare, ArrowUp, Clock, User, MoreVertical, Trash2, Twitter, MessageCircle } from 'lucide-react';
 import Markdown from 'react-markdown';
 import { motion, AnimatePresence } from 'motion/react';
 
 import VideoPlayer from './VideoPlayer';
+import Flair from './Flair';
+import SocialEmbed from './SocialEmbed';
+
+const RedditTitle = ({ title, metadata }: { title: string; metadata?: any }) => {
+  if (!title) return null;
+  if (!metadata) return <>{title}</>;
+
+  const parts = title.split(/:([a-zA-Z0-9_|[\]-]+):/g);
+  return (
+    <>
+      {parts.map((part, i) => {
+        if (i % 2 === 1) {
+          const name = part;
+          const emojiData = metadata[name] || Object.values(metadata).find((v: any) => v.id === name || v.id?.includes(`|${name}`));
+          if (emojiData && emojiData.s && emojiData.s.u) {
+            const url = emojiData.s.u.replace(/&amp;/g, '&');
+            return (
+              <img 
+                key={i}
+                src={url} 
+                alt={`:${name}:`} 
+                className="reddit-emoji"
+                referrerPolicy="no-referrer"
+              />
+            );
+          }
+          return <span key={i}>:{name}:</span>;
+        }
+        return <span key={i}>{part}</span>;
+      })}
+    </>
+  );
+};
+
+const RedditMarkdown = ({ content, metadata }: { content: string; metadata?: any }) => {
+  if (!content) return null;
+
+  const processedContent = content.replace(/:([a-zA-Z0-9_|[\]-]+):/g, (match, name) => {
+    if (!metadata) return match;
+    const emojiData = metadata[name] || Object.values(metadata).find((v: any) => v.id === name || v.id?.includes(`|${name}`));
+    if (emojiData && emojiData.s && emojiData.s.u) {
+      const url = emojiData.s.u.replace(/&amp;/g, '&');
+      return `![:${name}:](${url})`;
+    }
+    return match;
+  });
+
+  return (
+    <Markdown 
+      components={{
+        img: ({ node, ...props }) => {
+          const isEmoji = props.alt?.startsWith(':') && props.alt?.endsWith(':');
+          return (
+            <img 
+              {...props} 
+              className={isEmoji ? 'reddit-emoji' : props.className} 
+              referrerPolicy="no-referrer"
+              loading="lazy"
+            />
+          );
+        }
+      }}
+    >
+      {processedContent}
+    </Markdown>
+  );
+};
 
 interface PostDetailProps {
   post: RedditPost;
@@ -170,30 +237,28 @@ export default function PostDetail({
               </div>
               <span className="font-medium text-[#D7DADC]">u/{post.author}</span>
             </button>
-            {post.author_flair_text && (
-              <span className="px-1.5 py-0.5 bg-[#1A1A1B] text-[#D7DADC] text-[10px] rounded font-medium border border-white/10 shadow-sm">
-                {post.author_flair_text}
-              </span>
-            )}
+            <Flair 
+              text={post.author_flair_text} 
+              richtext={post.author_flair_richtext}
+              backgroundColor={post.author_flair_background_color}
+              textColor={post.author_flair_text_color}
+            />
             <span>•</span>
             <span>{new Date(post.created_utc * 1000).toLocaleDateString()}</span>
           </div>
           
           <div className="flex flex-col gap-1">
             <h1 className="text-[18px] font-bold text-[#D7DADC] leading-snug break-anywhere">
-              {post.title}
+              <RedditTitle title={post.title} metadata={post.media_metadata} />
             </h1>
             {post.link_flair_text && (
               <div className="mt-1">
-                <span 
-                  className="px-2 py-0.5 text-[10px] font-bold rounded border border-white/10 shadow-sm"
-                  style={{ 
-                    backgroundColor: post.link_flair_background_color || '#1A1A1B',
-                    color: post.link_flair_text_color === 'dark' ? '#000' : '#fff'
-                  }}
-                >
-                  {post.link_flair_text}
-                </span>
+                <Flair 
+                  text={post.link_flair_text} 
+                  richtext={post.link_flair_richtext}
+                  backgroundColor={post.link_flair_background_color}
+                  textColor={post.link_flair_text_color}
+                />
               </div>
             )}
           </div>
@@ -206,10 +271,22 @@ export default function PostDetail({
               <VideoPlayer 
                 src={post.media.reddit_video.fallback_url} 
                 hlsUrl={post.media.reddit_video.hls_url}
-                autoPlay
+                autoPlay={false}
                 muted={false}
                 className="w-full h-full"
               />
+            </div>
+          )}
+
+          {getTwitterId(post.url) && (
+            <div className="w-full p-4 md:p-8 bg-black">
+              <SocialEmbed url={post.url} type="twitter" />
+            </div>
+          )}
+
+          {getBlueskyId(post.url) && (
+            <div className="w-full p-4 md:p-8 bg-black">
+              <SocialEmbed url={post.url} type="bluesky" />
             </div>
           )}
 
@@ -314,7 +391,7 @@ export default function PostDetail({
         <div className="p-4 md:p-8 flex flex-col gap-8">
           {post.selftext && (
             <div className="text-sm text-[#D7DADC] leading-relaxed bg-[#1A1A1B] p-4 md:p-6 rounded-lg prose prose-invert prose-sm max-w-none break-anywhere">
-              <Markdown>{post.selftext}</Markdown>
+              <RedditMarkdown content={post.selftext} metadata={post.media_metadata} />
             </div>
           )}
 
@@ -481,18 +558,17 @@ function CommentItem({
           </div>
           <span className="font-medium text-[#D7DADC]">u/{comment.author}</span>
         </button>
-        {comment.author_flair_text && (
-          <span className="px-1.5 py-0.5 bg-[#1A1A1B] text-[#D7DADC] text-[10px] rounded font-medium border border-white/10 shadow-sm">
-            {comment.author_flair_text}
-          </span>
-        )}
+        <Flair 
+          text={comment.author_flair_text} 
+          richtext={comment.author_flair_richtext}
+        />
         <span>•</span>
         <span className={`font-bold ${voteDir === 1 ? 'text-[#FF4500]' : voteDir === -1 ? 'text-[#7193FF]' : ''}`}>
           {localScore} pts
         </span>
       </div>
       <div className="text-sm text-[#D7DADC] leading-relaxed prose prose-invert prose-sm max-w-none break-anywhere">
-        <Markdown>{comment.body}</Markdown>
+        <RedditMarkdown content={comment.body} metadata={comment.media_metadata} />
       </div>
       <div className="flex items-center gap-4 text-xs font-medium text-[#818384] mt-1">
         <div className="flex items-center gap-1">

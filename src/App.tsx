@@ -36,6 +36,11 @@ export default function App() {
   const [isSearching, setIsSearching] = useState(false);
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isInstallable, setIsInstallable] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(false);
+  const [isIframe, setIsIframe] = useState(false);
+  const isPopStateRef = useRef(false);
   const [filteredSubreddits, setFilteredSubreddits] = useState<string[]>(() => {
     try {
       return JSON.parse(localStorage.getItem('reddit_filtered_subreddits') || '[]');
@@ -105,6 +110,103 @@ export default function App() {
     // Set accent color for Material You feel
     root.style.setProperty('accent-color', '#FF4500');
   }, []);
+
+  useEffect(() => {
+    const checkStandalone = () => {
+      const inIframe = window.self !== window.top;
+      setIsIframe(inIframe);
+      const isStandaloneMode = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
+      // If in iframe, we are not the standalone app even if the parent is
+      setIsStandalone(isStandaloneMode && !inIframe);
+    };
+    checkStandalone();
+    
+    const handleBeforeInstallPrompt = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setIsInstallable(true);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    const handlePopState = (event: PopStateEvent) => {
+      isPopStateRef.current = true;
+      const state = event.state;
+      
+      if (state) {
+        if (state.view) setView(state.view);
+        if (state.subreddit) setSubreddit(state.subreddit);
+        if (state.postId === null) setSelectedPost(null);
+        if (state.showSubreddits !== undefined) setShowSubreddits(state.showSubreddits);
+        if (state.selectedUser === null) setSelectedUser(null);
+      } else {
+        // Default state
+        setView('feed');
+        setSelectedPost(null);
+        setShowSubreddits(false);
+        setSelectedUser(null);
+      }
+      
+      // Reset the ref after the state updates have been processed
+      setTimeout(() => {
+        isPopStateRef.current = false;
+      }, 100);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+
+    // Initial state
+    if (!window.history.state) {
+      window.history.replaceState({ 
+        view: 'feed', 
+        subreddit, 
+        postId: null, 
+        showSubreddits: false,
+        selectedUser: null
+      }, '');
+    }
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, []);
+
+  // Sync state changes to history
+  useEffect(() => {
+    if (isPopStateRef.current) return;
+
+    const currentState = window.history.state;
+    const newState = { 
+      view, 
+      subreddit, 
+      postId: selectedPost?.id || null, 
+      showSubreddits,
+      selectedUser
+    };
+
+    // Check if we should push a new state
+    const hasChanged = !currentState || 
+      currentState.view !== newState.view || 
+      currentState.subreddit !== newState.subreddit || 
+      currentState.postId !== newState.postId || 
+      currentState.showSubreddits !== newState.showSubreddits ||
+      currentState.selectedUser !== newState.selectedUser;
+
+    if (hasChanged) {
+      window.history.pushState(newState, '');
+    }
+  }, [view, subreddit, selectedPost, showSubreddits, selectedUser]);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setIsInstallable(false);
+      setDeferredPrompt(null);
+    }
+  };
 
   useEffect(() => {
     localStorage.setItem('reddit_filtered_subreddits', JSON.stringify(filteredSubreddits));
@@ -392,8 +494,8 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <div className="flex min-h-screen bg-[#030303] text-[#D7DADC] pb-20 md:pb-0 overflow-x-hidden">
-        <div className="flex min-h-screen w-full">
+      <div className="flex min-h-[100dvh] bg-[#030303] text-[#D7DADC] pb-20 md:pb-0 overflow-x-hidden">
+        <div className="flex min-h-[100dvh] w-full">
           {/* Desktop Navigation Rail */}
       <div className="hidden md:block">
         <Sidebar 
@@ -747,6 +849,41 @@ export default function App() {
                   )}
                 </div>
               </div>
+
+              {/* App Section */}
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center gap-2 text-[#D7DADC]">
+                  <Smartphone size={18} />
+                  <h3 className="font-medium">App</h3>
+                </div>
+                <div className="flex flex-col gap-3 p-4 bg-[#1A1A1B] rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-sm text-[#D7DADC] font-medium">Install Minute</span>
+                      <span className="text-xs text-[#818384]">
+                        {isIframe 
+                          ? 'Open in a new tab to install as a PWA'
+                          : isStandalone 
+                            ? 'Running in standalone mode' 
+                            : isInstallable 
+                              ? 'Add to your home screen for a better experience' 
+                              : 'Waiting for browser to enable installation...'}
+                      </span>
+                    </div>
+                    <button 
+                      disabled={!isInstallable || isStandalone || isIframe}
+                      onClick={handleInstallClick}
+                      className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${isInstallable && !isStandalone && !isIframe ? 'bg-[#FF4500] text-white hover:bg-[#FF4500]/90' : 'bg-[#343536] text-[#818384] cursor-not-allowed'}`}
+                    >
+                      {isStandalone ? 'Installed' : isInstallable ? 'Install' : isIframe ? 'Unavailable' : 'Checking...'}
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between pt-2 border-t border-white/5">
+                    <span className="text-sm text-[#D7DADC] font-medium">Version</span>
+                    <span className="text-xs text-[#818384]">1.0.0</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </main>
         )}
@@ -767,7 +904,7 @@ export default function App() {
       </div>
 
       {/* Mobile Navigation Bar */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-[#030303]/95 backdrop-blur-md px-4 py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] flex items-center justify-around z-50 shadow-[0_-1px_3px_rgba(0,0,0,0.2)]">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-[#030303]/95 backdrop-blur-md px-4 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] flex items-center justify-around z-50 shadow-[0_-1px_3px_rgba(0,0,0,0.2)] transform translate-z-0">
         <MobileNavItem icon={<Home size={20} />} label="Home" active={subreddit === 'home' && view === 'feed'} onClick={() => handleSubredditChange('home')} />
         <MobileNavItem icon={<TrendingUp size={20} />} label="Popular" active={subreddit === 'popular' && view === 'feed'} onClick={() => handleSubredditChange('popular')} />
         <MobileNavItem icon={<Globe size={20} />} label="Browse" active={showSubreddits} onClick={() => setShowSubreddits(true)} />
@@ -834,14 +971,6 @@ export default function App() {
               initial={{ x: '100%' }}
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
-              drag="x"
-              dragConstraints={{ left: 0, right: 1000 }}
-              dragElastic={0.7}
-              onDragEnd={(_, info) => {
-                if (info.offset.x > 30 || info.velocity.x > 100) {
-                  setSelectedPost(null);
-                }
-              }}
               transition={{ type: 'tween', ease: 'easeOut', duration: 0.25 }}
               className="fixed inset-y-0 right-0 w-full md:w-[640px] z-[70] bg-[#030303] shadow-2xl overflow-hidden"
             >
@@ -918,7 +1047,7 @@ export default function App() {
                     <VideoPlayer 
                       src={fullViewMediaPost.media.reddit_video.fallback_url} 
                       hlsUrl={fullViewMediaPost.media.reddit_video.hls_url}
-                      autoPlay
+                      autoPlay={false}
                       muted={false}
                       className="w-full h-full object-contain"
                     />

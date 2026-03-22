@@ -18,9 +18,11 @@ export interface RedditPost {
   link_flair_text?: string;
   link_flair_background_color?: string;
   link_flair_text_color?: string;
+  link_flair_richtext?: Array<{ e: 'text'; t?: string } | { e: 'emoji'; u: string; a: string }>;
   author_flair_text?: string;
   author_flair_background_color?: string;
   author_flair_text_color?: string;
+  author_flair_richtext?: Array<{ e: 'text'; t?: string } | { e: 'emoji'; u: string; a: string }>;
   author_fullname?: string;
   is_video: boolean;
   post_hint?: string;
@@ -45,6 +47,13 @@ export interface RedditPost {
       resolutions: Array<{ url: string; width: number; height: number }>;
     }>;
   };
+  media_metadata?: {
+    [key: string]: {
+      s: { u: string; x: number; y: number };
+      t: string;
+      id: string;
+    };
+  };
 }
 
 export interface RedditComment {
@@ -54,6 +63,7 @@ export interface RedditComment {
   score: number;
   created_utc: number;
   author_flair_text?: string;
+  author_flair_richtext?: Array<{ e: 'text'; t?: string } | { e: 'emoji'; u: string; a: string }>;
   author_fullname?: string;
   replies?: {
     data: {
@@ -62,6 +72,13 @@ export interface RedditComment {
   };
   likes: boolean | null;
   name: string;
+  media_metadata?: {
+    [key: string]: {
+      s: { u: string; x: number; y: number };
+      t: string;
+      id: string;
+    };
+  };
 }
 
 export interface RedditAccount {
@@ -387,6 +404,18 @@ export function getStreamableId(url: string): string | null {
   if (!url) return null;
   const match = url.match(/streamable\.com\/([a-z0-9]+)/i);
   return match ? match[1] : null;
+}
+
+export function getTwitterId(url: string): { username: string; id: string } | null {
+  if (!url) return null;
+  const match = url.match(/(twitter\.com|x\.com)\/([a-zA-Z0-9_]+)\/status\/([0-9]+)/i);
+  return match ? { username: match[2], id: match[3] } : null;
+}
+
+export function getBlueskyId(url: string): { handle: string; id: string } | null {
+  if (!url) return null;
+  const match = url.match(/bsky\.app\/profile\/([a-zA-Z0-9.-]+)\/post\/([a-zA-Z0-9]+)/i);
+  return match ? { handle: match[1], id: match[2] } : null;
 }
 
 export function getAuthUrl(clientId: string, redirectUri: string) {

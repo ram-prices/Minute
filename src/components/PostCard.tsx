@@ -4,10 +4,43 @@
  */
 
 import React, { useState, useRef, useEffect } from 'react';
-import { RedditPost, getStreamableId } from '../services/reddit';
-import { MessageSquare, ArrowUp, ArrowDown, MoreVertical, Play, Maximize2, User, Trash2 } from 'lucide-react';
+import { RedditPost, getStreamableId, getTwitterId, getBlueskyId } from '../services/reddit';
+import { MessageSquare, ArrowUp, ArrowDown, MoreVertical, Play, Maximize2, User, Trash2, Twitter, MessageCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import VideoPlayer from './VideoPlayer';
+import Flair from './Flair';
+import SocialEmbed from './SocialEmbed';
+
+const RedditTitle = ({ title, metadata }: { title: string; metadata?: any }) => {
+  if (!title) return null;
+  if (!metadata) return <>{title}</>;
+
+  const parts = title.split(/:([a-zA-Z0-9_|[\]-]+):/g);
+  return (
+    <>
+      {parts.map((part, i) => {
+        if (i % 2 === 1) {
+          const name = part;
+          const emojiData = metadata[name] || Object.values(metadata).find((v: any) => v.id === name || v.id?.includes(`|${name}`));
+          if (emojiData && emojiData.s && emojiData.s.u) {
+            const url = emojiData.s.u.replace(/&amp;/g, '&');
+            return (
+              <img 
+                key={i}
+                src={url} 
+                alt={`:${name}:`} 
+                className="reddit-emoji"
+                referrerPolicy="no-referrer"
+              />
+            );
+          }
+          return <span key={i}>:{name}:</span>;
+        }
+        return <span key={i}>{part}</span>;
+      })}
+    </>
+  );
+};
 
 interface PostCardProps {
   post: RedditPost;
@@ -187,11 +220,11 @@ export default function PostCard({
               </div>
               <span className="truncate">u/{post.author}</span>
             </button>
-            {post.author_flair_text && post.author.length < 15 && (
-              <span className="px-1.5 py-0.5 bg-[#1A1A1B] text-[#D7DADC] text-[10px] rounded font-medium border border-white/10 shadow-sm">
-                {post.author_flair_text}
-              </span>
-            )}
+            <Flair 
+              text={post.author_flair_text} 
+              richtext={post.author_flair_richtext}
+              className={post.author.length >= 15 ? 'hidden' : ''}
+            />
             {' '}• {timeAgo(post.created_utc)}
           </span>
         </div>
@@ -201,19 +234,16 @@ export default function PostCard({
       <div className="flex gap-3 mb-2">
         <div className="flex-1 min-w-0">
           <h2 className="text-[15px] font-medium text-[#D7DADC] leading-snug break-anywhere mb-1">
-            {post.title}
+            <RedditTitle title={post.title} metadata={post.media_metadata} />
           </h2>
           {post.link_flair_text && (
             <div className="mb-2">
-              <span 
-                className="px-2 py-0.5 text-[10px] font-bold rounded border border-white/10 shadow-sm"
-                style={{ 
-                  backgroundColor: post.link_flair_background_color || '#1A1A1B',
-                  color: post.link_flair_text_color === 'dark' ? '#000' : '#fff'
-                }}
-              >
-                {post.link_flair_text}
-              </span>
+              <Flair 
+                text={post.link_flair_text} 
+                richtext={post.link_flair_richtext}
+                backgroundColor={post.link_flair_background_color}
+                textColor={post.link_flair_text_color}
+              />
             </div>
           )}
         </div>
@@ -248,6 +278,16 @@ export default function PostCard({
             {post.is_video && (
               <div className="absolute bottom-1 right-1 p-1 bg-black/60 rounded-md text-white">
                 <Play size={10} fill="currentColor" />
+              </div>
+            )}
+            {getTwitterId(post.url) && (
+              <div className="absolute bottom-1 right-1 p-1 bg-[#1DA1F2] rounded-md text-white">
+                <Twitter size={10} fill="currentColor" />
+              </div>
+            )}
+            {getBlueskyId(post.url) && (
+              <div className="absolute bottom-1 right-1 p-1 bg-blue-500 rounded-md text-white">
+                <MessageCircle size={10} fill="currentColor" />
               </div>
             )}
           </div>
@@ -355,13 +395,21 @@ export default function PostCard({
                   hlsUrl={post.media.reddit_video.hls_url}
                   className="w-full h-full object-contain"
                   autoPlay
-                  muted={false}
+                  muted={true}
                   controls={false}
                 />
+              ) : getTwitterId(post.url) ? (
+                <div className="w-full max-w-lg p-4 pointer-events-auto">
+                  <SocialEmbed url={post.url} type="twitter" />
+                </div>
+              ) : getBlueskyId(post.url) ? (
+                <div className="w-full max-w-lg p-4 pointer-events-auto">
+                  <SocialEmbed url={post.url} type="bluesky" />
+                </div>
               ) : getStreamableId(post.url) ? (
                 <div className="w-full h-full bg-black flex flex-col pointer-events-auto">
                   <iframe 
-                    src={`https://streamable.com/e/${getStreamableId(post.url)}?autoplay=1`} 
+                    src={`https://streamable.com/e/${getStreamableId(post.url)}?autoplay=1&muted=1`} 
                     className="w-full h-full border-none"
                     title="Streamable Preview"
                     allow="autoplay; fullscreen"
