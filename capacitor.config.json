@@ -1,0 +1,6 @@
+{
+  "appId": "org.cygnusx1.continuum.web",
+  "appName": "Continuum Web",
+  "webDir": "dist",
+  "bundledWebRuntime": false
+}
