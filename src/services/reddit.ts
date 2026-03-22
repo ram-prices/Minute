@@ -25,6 +25,13 @@ export interface RedditPost {
   author_flair_richtext?: Array<{ e: 'text'; t?: string } | { e: 'emoji'; u: string; a: string }>;
   author_fullname?: string;
   is_video: boolean;
+  is_gallery?: boolean;
+  gallery_data?: {
+    items: Array<{
+      media_id: string;
+      id: number;
+    }>;
+  };
   post_hint?: string;
   domain?: string;
   sr_detail?: {

@@ -144,7 +144,7 @@ export default function VideoPlayer({
         muted={isMuted}
         loop
         playsInline
-        className="w-full h-full object-contain"
+        className="w-full h-full max-h-full object-contain"
         onClick={togglePlay}
         onContextMenu={(e) => e.preventDefault()}
       />

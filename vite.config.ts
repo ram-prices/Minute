@@ -19,35 +19,7 @@ export default defineConfig(({mode}) => {
         workbox: {
           globPatterns: ['**/*.{js,css,html,ico,png,svg}']
         },
-        manifest: {
-          name: 'Minute',
-          short_name: 'Minute',
-          description: 'A high-performance Reddit client.',
-          theme_color: '#030303',
-          background_color: '#030303',
-          display: 'standalone',
-          start_url: '/',
-          icons: [
-            {
-              src: 'https://api.dicebear.com/7.x/initials/png?seed=M&backgroundColor=000000&size=192',
-              sizes: '192x192',
-              type: 'image/png',
-              purpose: 'any'
-            },
-            {
-              src: 'https://api.dicebear.com/7.x/initials/png?seed=M&backgroundColor=000000&size=512',
-              sizes: '512x512',
-              type: 'image/png',
-              purpose: 'any'
-            },
-            {
-              src: 'https://api.dicebear.com/7.x/initials/png?seed=M&backgroundColor=000000&size=512',
-              sizes: '512x512',
-              type: 'image/png',
-              purpose: 'maskable'
-            }
-          ]
-        },
+        manifest: false,
         devOptions: {
           enabled: true
         }

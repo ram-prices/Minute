@@ -69,7 +69,7 @@ export default function UserProfile({
 
   if (loading) {
     return (
-      <div className="h-full flex flex-col items-center justify-center bg-[#030303] text-gray-400">
+      <div className="h-full flex flex-col items-center justify-center bg-bg-primary text-gray-400">
         <Loader2 size={32} className="animate-spin mb-4" />
         <p className="text-sm font-medium uppercase tracking-wider">Loading Profile...</p>
       </div>
@@ -77,22 +77,22 @@ export default function UserProfile({
   }
 
   return (
-    <div className="h-full flex flex-col bg-[#030303] overflow-hidden">
-      <header className="sticky top-0 bg-[#030303]/90 backdrop-blur-md p-4 md:px-6 flex items-center gap-4 z-10">
+    <div className="h-full flex flex-col bg-bg-primary overflow-hidden">
+      <header className="sticky top-0 bg-bg-primary/90 backdrop-blur-md p-4 md:px-6 flex items-center gap-4 z-10">
         <button 
           onClick={onClose}
-          className="p-1 -ml-1 text-[#818384] hover:text-[#D7DADC] transition-colors"
+          className="p-1 -ml-1 text-text-secondary hover:text-text-primary transition-colors"
         >
           <ArrowLeft size={22} />
         </button>
-        <h2 className="font-bold text-[#D7DADC]">u/{username}</h2>
+        <h2 className="font-bold text-text-primary">u/{username}</h2>
       </header>
 
       <div className="flex-1 overflow-y-auto">
         {/* Profile Header */}
-        <div className="p-6 md:p-8 flex flex-col gap-6 border-b border-white/5">
+        <div className="p-6 md:p-8 flex flex-col gap-6 border-b border-border-color">
           <div className="flex items-center gap-6">
-            <div className="w-20 h-20 md:w-24 md:h-24 rounded-full bg-[#1A1A1B] overflow-hidden shrink-0">
+            <div className="w-20 h-20 md:w-24 md:h-24 rounded-full bg-bg-secondary overflow-hidden shrink-0">
               {profile?.icon_img ? (
                 <img 
                   src={profile.icon_img.split('?')[0]} 
@@ -107,8 +107,8 @@ export default function UserProfile({
               )}
             </div>
             <div className="flex flex-col gap-1">
-              <h1 className="text-2xl font-bold text-[#D7DADC]">u/{username}</h1>
-              <div className="flex flex-wrap gap-4 text-sm text-[#818384]">
+              <h1 className="text-2xl font-bold text-text-primary">u/{username}</h1>
+              <div className="flex flex-wrap gap-4 text-sm text-text-secondary">
                 <div className="flex items-center gap-1.5">
                   <Award size={16} />
                   <span>{profile?.link_karma + profile?.comment_karma || 0} karma</span>
@@ -122,7 +122,7 @@ export default function UserProfile({
           </div>
           
           {profile?.public_description && (
-            <p className="text-sm text-[#D7DADC] leading-relaxed max-w-2xl">
+            <p className="text-sm text-text-primary leading-relaxed max-w-2xl">
               {profile.public_description}
             </p>
           )}
@@ -130,9 +130,9 @@ export default function UserProfile({
 
         {/* User Posts */}
         <div className="p-0 md:p-8 max-w-4xl mx-auto w-full flex flex-col gap-0 md:gap-6">
-          <h3 className="px-4 md:px-0 text-lg font-semibold text-[#D7DADC] mb-2 md:mb-0">Posts</h3>
+          <h3 className="px-4 md:px-0 text-lg font-semibold text-text-primary mb-2 md:mb-0">Posts</h3>
           {posts.length === 0 ? (
-            <div className="p-12 text-center text-[#818384]">
+            <div className="p-12 text-center text-text-secondary">
               <p>No posts yet.</p>
             </div>
           ) : (
@@ -152,7 +152,7 @@ export default function UserProfile({
                 <button 
                   onClick={loadMore}
                   disabled={loadingMore}
-                  className="mx-4 md:mx-0 py-4 bg-[#1A1A1B] text-[#D7DADC] rounded-xl text-sm font-medium hover:bg-[#272729] transition-all mb-8 flex items-center justify-center gap-2"
+                  className="mx-4 md:mx-0 py-4 bg-bg-secondary text-text-primary rounded-xl text-sm font-medium hover:bg-bg-tertiary transition-all mb-8 flex items-center justify-center gap-2"
                 >
                   {loadingMore ? <Loader2 size={18} className="animate-spin" /> : 'Load More'}
                 </button>

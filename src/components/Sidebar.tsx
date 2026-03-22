@@ -34,12 +34,12 @@ export default function Sidebar({
   const subredditsToDisplay = isLoggedIn && mySubreddits.length > 0 ? mySubreddits : DEFAULT_SUBREDDITS;
 
   return (
-    <div className="w-64 h-screen bg-[#030303] p-4 flex flex-col gap-6 sticky top-0">
+    <div className="w-64 h-screen bg-bg-primary p-4 flex flex-col gap-6 sticky top-0">
       <div className="flex items-center gap-3 px-2 mt-2">
         <div className="w-8 h-8 bg-[#FF4500] rounded-md flex items-center justify-center">
           <div className="w-3 h-3 bg-white rounded-full" />
         </div>
-        <h1 className="text-lg font-semibold tracking-tight text-[#D7DADC]">Minute</h1>
+        <h1 className="text-lg font-semibold tracking-tight text-text-primary">Minute</h1>
       </div>
 
       <nav className="flex-1 flex flex-col gap-6 mt-4 overflow-y-auto pr-2 custom-scrollbar">
@@ -104,17 +104,17 @@ export default function Sidebar({
           )}
         </div>
 
-        <div className="flex items-center justify-between px-2 text-[#818384] pt-4">
+        <div className="flex items-center justify-between px-2 text-text-secondary pt-4">
           <button 
             onClick={onSettingsClick}
-            className="flex items-center gap-2 text-sm font-medium hover:text-[#D7DADC] transition-colors"
+            className="flex items-center gap-2 text-sm font-medium hover:text-text-primary transition-colors"
           >
             <Settings size={18} />
             <span>Settings</span>
           </button>
           <div className="flex flex-col items-end gap-0.5">
             {isLoggedIn && currentUsername && (
-              <span className="text-[10px] font-bold text-[#D7DADC] truncate max-w-[80px]">u/{currentUsername}</span>
+              <span className="text-[10px] font-bold text-text-primary truncate max-w-[80px]">u/{currentUsername}</span>
             )}
             <div className="flex items-center gap-1.5">
               <div className="w-2 h-2 bg-green-500 rounded-full" />
@@ -133,11 +133,11 @@ function NavItem({ icon, label, active, onClick }: { icon: React.ReactNode, labe
       onClick={onClick}
       className={`flex items-center gap-3 px-2 py-2 rounded-md transition-colors text-sm font-medium ${
         active 
-          ? 'bg-[#272729] text-[#D7DADC]' 
-          : 'text-[#818384] hover:bg-[#1A1A1B] hover:text-[#D7DADC]'
+          ? 'bg-bg-tertiary text-text-primary' 
+          : 'text-text-secondary hover:bg-bg-secondary hover:text-text-primary'
       }`}
     >
-      <div className={`${active ? 'text-[#D7DADC]' : 'text-[#818384]'}`}>
+      <div className={`${active ? 'text-text-primary' : 'text-text-secondary'}`}>
         {icon}
       </div>
       <span className="capitalize">{label}</span>

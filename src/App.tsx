@@ -9,18 +9,38 @@ import PostCard from './components/PostCard';
 import PostDetail from './components/PostDetail';
 import VideoPlayer from './components/VideoPlayer';
 import UserProfile from './components/UserProfile';
-import { RedditPost, fetchSubreddit, setRedditAuth, getAuthUrl, fetchMySubreddits } from './services/reddit';
-import { Search, RefreshCw, Loader2, Home, TrendingUp, Hash, Settings, X, Smartphone, Globe, LogIn, LogOut, Info, User, UserCircle, Trash2, ArrowLeft } from 'lucide-react';
+import { RedditPost, fetchSubreddit, setRedditAuth, getAuthUrl, fetchMySubreddits, getStreamableId } from './services/reddit';
+import { Search, RefreshCw, Loader2, Home, TrendingUp, Hash, Settings, X, Smartphone, Globe, LogIn, LogOut, Info, User, UserCircle, Trash2, ArrowLeft, Moon } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import ReactPlayer from 'react-player';
 
 export default function App() {
   const [view, setView] = useState<'feed' | 'settings' | 'profile'>('feed');
+  const [theme, setTheme] = useState<'system' | 'light' | 'dark'>(() => {
+    return (localStorage.getItem('theme') as 'system' | 'light' | 'dark') || 'system';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('theme', theme);
+    const root = document.documentElement;
+    root.classList.remove('light', 'dark');
+    if (theme !== 'system') {
+      root.classList.add(theme);
+    } else {
+      if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        root.classList.add('dark');
+      } else {
+        root.classList.add('light');
+      }
+    }
+  }, [theme]);
   const [subreddit, setSubreddit] = useState(localStorage.getItem('reddit_access_token') ? 'home' : 'all');
   const [subredditHistory, setSubredditHistory] = useState<string[]>([]);
   const [selectedUser, setSelectedUser] = useState<string | null>(null);
   const [posts, setPosts] = useState<RedditPost[]>([]);
   const [selectedPost, setSelectedPost] = useState<RedditPost | null>(null);
   const [fullViewMediaPost, setFullViewMediaPost] = useState<RedditPost | null>(null);
+  const [galleryIndex, setGalleryIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [after, setAfter] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -110,6 +130,10 @@ export default function App() {
     // Set accent color for Material You feel
     root.style.setProperty('accent-color', '#FF4500');
   }, []);
+
+  useEffect(() => {
+    setGalleryIndex(0);
+  }, [fullViewMediaPost]);
 
   useEffect(() => {
     const checkStandalone = () => {
@@ -494,7 +518,7 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <div className="flex min-h-[100dvh] bg-[#030303] text-[#D7DADC] pb-20 md:pb-0 overflow-x-hidden">
+      <div className="flex min-h-[100dvh] bg-bg-primary text-text-primary pb-20 md:pb-0 overflow-x-hidden">
         <div className="flex min-h-[100dvh] w-full">
           {/* Desktop Navigation Rail */}
       <div className="hidden md:block">
@@ -515,7 +539,7 @@ export default function App() {
         {view === 'feed' && (
           <main className="flex-1 flex flex-col w-full min-w-0">
             {/* Top App Bar */}
-            <header className="sticky top-0 z-40 bg-[#030303]/90 backdrop-blur-md px-4 py-3 md:px-8 md:py-4 flex items-center justify-between min-h-[56px]">
+            <header className="sticky top-0 z-40 bg-bg-primary/90 backdrop-blur-md px-4 py-3 md:px-8 md:py-4 flex items-center justify-between min-h-[56px]">
               <AnimatePresence mode="wait">
                 {isSearchExpanded ? (
                   <motion.div 
@@ -531,12 +555,12 @@ export default function App() {
                         setSearchQuery('');
                         setShowSearchResults(false);
                       }}
-                      className="p-2 text-[#818384] hover:text-[#D7DADC]"
+                      className="p-2 text-text-secondary hover:text-text-primary"
                     >
                       <ArrowLeft size={20} />
                     </button>
                     <div className="relative flex-1">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#818384]" size={16} />
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" size={16} />
                       <input 
                         autoFocus
                         type="text" 
@@ -551,7 +575,7 @@ export default function App() {
                             setIsSearchExpanded(false);
                           }
                         }}
-                        className="w-full pl-9 pr-4 py-2 bg-[#1A1A1B] text-[#D7DADC] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#FF4500] transition-all"
+                        className="w-full pl-9 pr-4 py-2 bg-bg-secondary text-text-primary rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#FF4500] transition-all"
                       />
                       
                       <AnimatePresence>
@@ -560,7 +584,7 @@ export default function App() {
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: 10 }}
-                            className="absolute top-full left-0 right-0 mt-2 bg-[#1A1A1B] border border-white/10 rounded-lg shadow-2xl z-50 overflow-hidden"
+                            className="absolute top-full left-0 right-0 mt-2 bg-bg-secondary border border-border-color rounded-lg shadow-2xl z-50 overflow-hidden"
                           >
                             {searchResults.map((sr) => (
                               <button
@@ -571,9 +595,9 @@ export default function App() {
                                   setShowSearchResults(false);
                                   setIsSearchExpanded(false);
                                 }}
-                                className="w-full px-4 py-2.5 text-left text-sm text-[#D7DADC] hover:bg-white/5 transition-colors border-b border-white/5 last:border-none flex items-center gap-2"
+                                className="w-full px-4 py-2.5 text-left text-sm text-text-primary hover:bg-hover-bg transition-colors border-b border-border-color last:border-none flex items-center gap-2"
                               >
-                                <Hash size={14} className="text-[#818384]" />
+                                <Hash size={14} className="text-text-secondary" />
                                 <span>r/{sr}</span>
                               </button>
                             ))}
@@ -594,7 +618,7 @@ export default function App() {
                       <div className="md:hidden w-8 h-8 bg-[#FF4500] rounded-md flex items-center justify-center shrink-0">
                         <div className="w-3 h-3 bg-white rounded-full" />
                       </div>
-                      <h1 className="text-xl font-semibold tracking-tight truncate max-w-[150px] md:max-w-none text-[#D7DADC]">
+                      <h1 className="text-xl font-semibold tracking-tight truncate max-w-[150px] md:max-w-none text-text-primary">
                         {subreddit === 'home' ? 'Home' : `r/${subreddit}`}
                       </h1>
                     </div>
@@ -602,7 +626,7 @@ export default function App() {
                     <div className="flex items-center gap-2 md:gap-4">
                       <button 
                         onClick={() => setIsSearchExpanded(true)}
-                        className="sm:hidden p-2 text-[#818384] hover:text-[#D7DADC] hover:bg-[#272729] rounded-md transition-all"
+                        className="sm:hidden p-2 text-text-secondary hover:text-text-primary hover:bg-bg-tertiary rounded-md transition-all"
                       >
                         <Search size={20} />
                       </button>
@@ -610,7 +634,7 @@ export default function App() {
                       {!isLoggedIn && (
                         <button 
                           onClick={handleRedditLogin}
-                          className="sm:hidden p-2 text-[#D7DADC] hover:bg-[#272729] rounded-md transition-all"
+                          className="sm:hidden p-2 text-text-primary hover:bg-bg-tertiary rounded-md transition-all"
                         >
                           <LogIn size={20} />
                         </button>
@@ -625,7 +649,7 @@ export default function App() {
                         </button>
                       )}
                       <div className="relative hidden sm:block">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#818384]" size={16} />
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" size={16} />
                         <input 
                           type="text" 
                           placeholder="Search subreddits..." 
@@ -638,7 +662,7 @@ export default function App() {
                               setShowSearchResults(false);
                             }
                           }}
-                          className="pl-9 pr-4 py-2 bg-[#1A1A1B] text-[#D7DADC] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#FF4500] transition-all w-48 lg:w-64 focus:bg-[#272729]"
+                          className="pl-9 pr-4 py-2 bg-bg-secondary text-text-primary rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#FF4500] transition-all w-48 lg:w-64 focus:bg-bg-tertiary"
                         />
                         
                         <AnimatePresence>
@@ -647,7 +671,7 @@ export default function App() {
                               initial={{ opacity: 0, y: 10 }}
                               animate={{ opacity: 1, y: 0 }}
                               exit={{ opacity: 0, y: 10 }}
-                              className="absolute top-full left-0 right-0 mt-2 bg-[#1A1A1B] border border-white/10 rounded-lg shadow-2xl z-50 overflow-hidden"
+                              className="absolute top-full left-0 right-0 mt-2 bg-bg-secondary border border-border-color rounded-lg shadow-2xl z-50 overflow-hidden"
                             >
                               {searchResults.map((sr) => (
                                 <button
@@ -657,9 +681,9 @@ export default function App() {
                                     setSearchQuery('');
                                     setShowSearchResults(false);
                                   }}
-                                  className="w-full px-4 py-2.5 text-left text-sm text-[#D7DADC] hover:bg-white/5 transition-colors border-b border-white/5 last:border-none flex items-center gap-2"
+                                  className="w-full px-4 py-2.5 text-left text-sm text-text-primary hover:bg-hover-bg transition-colors border-b border-border-color last:border-none flex items-center gap-2"
                                 >
-                                  <Hash size={14} className="text-[#818384]" />
+                                  <Hash size={14} className="text-text-secondary" />
                                   <span>r/{sr}</span>
                                 </button>
                               ))}
@@ -669,7 +693,7 @@ export default function App() {
                       </div>
                       <button 
                         onClick={handleRefresh}
-                        className={`p-2 text-[#818384] hover:text-[#D7DADC] hover:bg-[#272729] rounded-md transition-all touch-manipulation ${isRefreshing ? 'animate-spin text-[#D7DADC]' : ''}`}
+                        className={`p-2 text-text-secondary hover:text-text-primary hover:bg-bg-tertiary rounded-md transition-all touch-manipulation ${isRefreshing ? 'animate-spin text-text-primary' : ''}`}
                       >
                         <RefreshCw size={20} />
                       </button>
@@ -745,7 +769,7 @@ export default function App() {
                   
                   {/* Infinite Scroll Target */}
                   <div ref={observerTarget} className="h-20 flex items-center justify-center">
-                    {loading && <Loader2 size={24} className="animate-spin text-[#818384]" />}
+                    {loading && <Loader2 size={24} className="animate-spin text-text-secondary" />}
                   </div>
                 </>
               )}
@@ -755,23 +779,48 @@ export default function App() {
 
         {/* Settings View */}
         {view === 'settings' && (
-          <main className="flex-1 flex flex-col w-full min-w-0 bg-[#030303]">
-            <header className="sticky top-0 z-40 bg-[#030303]/90 backdrop-blur-md px-4 py-3 md:px-8 md:py-4 flex items-center gap-4">
-              <button onClick={() => setView('feed')} className="p-1 text-[#818384] hover:text-[#D7DADC]">
+          <main className="flex-1 flex flex-col w-full min-w-0 bg-bg-primary">
+            <header className="sticky top-0 z-40 bg-bg-primary/90 backdrop-blur-md px-4 py-3 md:px-8 md:py-4 flex items-center gap-4">
+              <button onClick={() => setView('feed')} className="p-1 text-text-secondary hover:text-text-primary">
                 <ArrowLeft size={22} />
               </button>
-              <h1 className="text-xl font-semibold text-[#D7DADC]">Settings</h1>
+              <h1 className="text-xl font-semibold text-text-primary">Settings</h1>
             </header>
             <div className="p-4 md:p-8 max-w-2xl mx-auto w-full flex flex-col gap-8">
+              {/* Appearance Section */}
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center gap-2 text-text-primary">
+                  <Moon size={18} />
+                  <h3 className="font-medium">Appearance</h3>
+                </div>
+                <div className="flex flex-col gap-3 p-4 bg-bg-secondary rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <label className="text-sm font-medium text-text-primary">Theme</label>
+                      <p className="text-xs text-text-secondary mt-0.5">Choose your preferred theme</p>
+                    </div>
+                    <select 
+                      className="bg-bg-primary border border-border-color rounded-lg px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-[#FF4500]"
+                      value={theme}
+                      onChange={(e) => setTheme(e.target.value as 'system' | 'light' | 'dark')}
+                    >
+                      <option value="system">System</option>
+                      <option value="light">Light</option>
+                      <option value="dark">Dark</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
               {/* API Configuration Section */}
               <div className="flex flex-col gap-4">
-                <div className="flex items-center gap-2 text-[#D7DADC]">
+                <div className="flex items-center gap-2 text-text-primary">
                   <Hash size={18} />
                   <h3 className="font-medium">API Configuration</h3>
                 </div>
-                <div className="flex flex-col gap-3 p-4 bg-[#1A1A1B] rounded-lg">
+                <div className="flex flex-col gap-3 p-4 bg-bg-secondary rounded-lg">
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-medium text-[#818384] uppercase tracking-wider">Reddit Client ID</label>
+                    <label className="text-xs font-medium text-text-secondary uppercase tracking-wider">Reddit Client ID</label>
                     <input 
                       type="text" 
                       value={redditClientId}
@@ -780,12 +829,12 @@ export default function App() {
                         localStorage.setItem('reddit_client_id', e.target.value);
                       }}
                       placeholder="Enter Reddit Client ID"
-                      className="bg-[#030303] rounded-md px-3 py-2 text-sm text-[#D7DADC] outline-none focus:ring-1 focus:ring-[#FF4500]"
+                      className="bg-bg-primary rounded-md px-3 py-2 text-sm text-text-primary outline-none focus:ring-1 focus:ring-[#FF4500]"
                     />
-                    <p className="text-[11px] text-[#818384] mt-1">
+                    <p className="text-[11px] text-text-secondary mt-1">
                       Create an app at <a href="https://www.reddit.com/prefs/apps" target="_blank" rel="noreferrer" className="text-[#FF4500] hover:underline">reddit.com/prefs/apps</a> (Type: installed app).<br/>
                       Set redirect uri to: <br/>
-                      <code className="bg-[#030303] px-1.5 py-0.5 rounded mt-1 inline-block select-all">{window.location.origin}/auth/callback</code>
+                      <code className="bg-bg-primary px-1.5 py-0.5 rounded mt-1 inline-block select-all">{window.location.origin}/auth/callback</code>
                     </p>
                   </div>
                 </div>
@@ -793,19 +842,19 @@ export default function App() {
 
               {/* Reddit Account Section */}
               <div className="flex flex-col gap-4">
-                <div className="flex items-center gap-2 text-[#D7DADC]">
+                <div className="flex items-center gap-2 text-text-primary">
                   <UserCircle size={18} />
                   <h3 className="font-medium">Reddit Accounts</h3>
                 </div>
-                <div className="flex flex-col gap-3 p-4 bg-[#1A1A1B] rounded-lg">
+                <div className="flex flex-col gap-3 p-4 bg-bg-secondary rounded-lg">
                   {accounts.length > 0 ? (
                     <div className="flex flex-col gap-3">
                       {accounts.map(acc => (
-                        <div key={acc.username} className="flex items-center justify-between p-2 bg-[#030303] rounded-lg">
+                        <div key={acc.username} className="flex items-center justify-between p-2 bg-bg-primary rounded-lg">
                           <div className="flex items-center gap-2">
                             <div className={`w-2 h-2 rounded-full ${acc.username === currentUsername ? 'bg-green-500' : 'bg-[#343536]'}`} />
                             <div className="flex flex-col">
-                              <span className="text-sm font-medium text-[#D7DADC]">u/{acc.username}</span>
+                              <span className="text-sm font-medium text-text-primary">u/{acc.username}</span>
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
@@ -819,7 +868,7 @@ export default function App() {
                             )}
                             <button 
                               onClick={() => handleRemoveAccount(acc.username)}
-                              className="p-1 text-[#818384] hover:text-red-500 transition-colors"
+                              className="p-1 text-text-secondary hover:text-red-500 transition-colors"
                             >
                               <Trash2 size={14} />
                             </button>
@@ -836,8 +885,8 @@ export default function App() {
                   ) : (
                     <div className="flex flex-col gap-3">
                       <div className="flex items-center justify-between">
-                        <span className="text-sm text-[#D7DADC] font-medium">Status</span>
-                        <span className="text-xs px-2 py-0.5 bg-[#343536] text-[#818384] rounded-full font-bold">Disconnected</span>
+                        <span className="text-sm text-text-primary font-medium">Status</span>
+                        <span className="text-xs px-2 py-0.5 bg-[#343536] text-text-secondary rounded-full font-bold">Disconnected</span>
                       </div>
                       <button 
                         onClick={handleRedditLogin}
@@ -852,15 +901,15 @@ export default function App() {
 
               {/* App Section */}
               <div className="flex flex-col gap-4">
-                <div className="flex items-center gap-2 text-[#D7DADC]">
+                <div className="flex items-center gap-2 text-text-primary">
                   <Smartphone size={18} />
                   <h3 className="font-medium">App</h3>
                 </div>
-                <div className="flex flex-col gap-3 p-4 bg-[#1A1A1B] rounded-lg">
+                <div className="flex flex-col gap-3 p-4 bg-bg-secondary rounded-lg">
                   <div className="flex items-center justify-between">
                     <div className="flex flex-col gap-0.5">
-                      <span className="text-sm text-[#D7DADC] font-medium">Install Minute</span>
-                      <span className="text-xs text-[#818384]">
+                      <span className="text-sm text-text-primary font-medium">Install Minute</span>
+                      <span className="text-xs text-text-secondary">
                         {isIframe 
                           ? 'Open in a new tab to install as a PWA'
                           : isStandalone 
@@ -873,14 +922,14 @@ export default function App() {
                     <button 
                       disabled={!isInstallable || isStandalone || isIframe}
                       onClick={handleInstallClick}
-                      className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${isInstallable && !isStandalone && !isIframe ? 'bg-[#FF4500] text-white hover:bg-[#FF4500]/90' : 'bg-[#343536] text-[#818384] cursor-not-allowed'}`}
+                      className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${isInstallable && !isStandalone && !isIframe ? 'bg-[#FF4500] text-white hover:bg-[#FF4500]/90' : 'bg-[#343536] text-text-secondary cursor-not-allowed'}`}
                     >
                       {isStandalone ? 'Installed' : isInstallable ? 'Install' : isIframe ? 'Unavailable' : 'Checking...'}
                     </button>
                   </div>
-                  <div className="flex items-center justify-between pt-2 border-t border-white/5">
-                    <span className="text-sm text-[#D7DADC] font-medium">Version</span>
-                    <span className="text-xs text-[#818384]">1.0.0</span>
+                  <div className="flex items-center justify-between pt-2 border-t border-border-color">
+                    <span className="text-sm text-text-primary font-medium">Version</span>
+                    <span className="text-xs text-text-secondary">1.0.0</span>
                   </div>
                 </div>
               </div>
@@ -904,7 +953,7 @@ export default function App() {
       </div>
 
       {/* Mobile Navigation Bar */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-[#030303]/95 backdrop-blur-md px-4 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] flex items-center justify-around z-50 shadow-[0_-1px_3px_rgba(0,0,0,0.2)] transform translate-z-0">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-bg-primary/95 backdrop-blur-md px-4 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] flex items-center justify-around z-50 shadow-[0_-1px_3px_rgba(0,0,0,0.2)] transform translate-z-0">
         <MobileNavItem icon={<Home size={20} />} label="Home" active={subreddit === 'home' && view === 'feed'} onClick={() => handleSubredditChange('home')} />
         <MobileNavItem icon={<TrendingUp size={20} />} label="Popular" active={subreddit === 'popular' && view === 'feed'} onClick={() => handleSubredditChange('popular')} />
         <MobileNavItem icon={<Globe size={20} />} label="Browse" active={showSubreddits} onClick={() => setShowSubreddits(true)} />
@@ -927,11 +976,11 @@ export default function App() {
               animate={{ y: 0 }}
               exit={{ y: '100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="fixed bottom-0 left-0 right-0 max-h-[70vh] bg-[#1A1A1B] rounded-t-2xl z-[90] overflow-hidden flex flex-col shadow-2xl"
+              className="fixed bottom-0 left-0 right-0 max-h-[70vh] bg-bg-secondary rounded-t-2xl z-[90] overflow-hidden flex flex-col shadow-2xl"
             >
-              <header className="p-4 flex items-center justify-between sticky top-0 bg-[#1A1A1B] z-10">
-                <h2 className="font-semibold text-[#D7DADC]">Subreddits</h2>
-                <button onClick={() => setShowSubreddits(false)} className="p-1 text-[#818384]">
+              <header className="p-4 flex items-center justify-between sticky top-0 bg-bg-secondary z-10">
+                <h2 className="font-semibold text-text-primary">Subreddits</h2>
+                <button onClick={() => setShowSubreddits(false)} className="p-1 text-text-secondary">
                   <X size={20} />
                 </button>
               </header>
@@ -941,10 +990,10 @@ export default function App() {
                     key={sub}
                     onClick={() => handleSubredditChange(sub)}
                     className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors ${
-                      subreddit === sub ? 'bg-[#272729] text-[#D7DADC]' : 'text-[#818384] active:bg-[#272729]'
+                      subreddit === sub ? 'bg-bg-tertiary text-text-primary' : 'text-text-secondary active:bg-bg-tertiary'
                     }`}
                   >
-                    <Hash size={18} className="text-[#818384]" />
+                    <Hash size={18} className="text-text-secondary" />
                     <span className="capitalize">{sub}</span>
                   </button>
                 ))}
@@ -972,7 +1021,7 @@ export default function App() {
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'tween', ease: 'easeOut', duration: 0.25 }}
-              className="fixed inset-y-0 right-0 w-full md:w-[640px] z-[70] bg-[#030303] shadow-2xl overflow-hidden"
+              className="fixed inset-y-0 right-0 w-full md:w-[640px] z-[70] bg-bg-primary shadow-2xl overflow-hidden"
             >
               <PostDetail 
                 post={selectedPost} 
@@ -990,6 +1039,10 @@ export default function App() {
                 }}
                 onFilterSubreddit={handleFilterSubreddit}
                 onFilterUser={handleFilterUser}
+                onMediaClick={(post, index) => {
+                  setFullViewMediaPost(post);
+                  if (index !== undefined) setGalleryIndex(index);
+                }}
               />
             </motion.div>
           </>
@@ -1011,15 +1064,7 @@ export default function App() {
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
               transition={{ duration: 0.2 }}
-              drag="y"
-              dragConstraints={{ top: 0, bottom: 0 }}
-              dragElastic={0.5}
-              onDragEnd={(_, info) => {
-                if (Math.abs(info.offset.y) > 100 || Math.abs(info.velocity.y) > 500) {
-                  setFullViewMediaPost(null);
-                }
-              }}
-              className="relative w-full h-full flex items-center justify-center p-4 cursor-grab active:cursor-grabbing"
+              className="relative w-full h-full flex items-center justify-center cursor-grab active:cursor-grabbing"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="absolute top-6 right-6 flex items-center gap-3 z-10">
@@ -1042,47 +1087,104 @@ export default function App() {
               </div>
 
               <div className="w-full h-full flex items-center justify-center">
-                {fullViewMediaPost.is_video && fullViewMediaPost.media?.reddit_video ? (
-                  <div className="w-full max-h-full aspect-video">
+                {fullViewMediaPost.is_gallery && fullViewMediaPost.gallery_data?.items && fullViewMediaPost.media_metadata ? (
+                  <div 
+                    className="w-full h-full flex items-center justify-center relative touch-none"
+                    onTouchStart={(e) => {
+                      const touch = e.touches[0];
+                      (e.currentTarget as any).startX = touch.clientX;
+                    }}
+                    onTouchMove={(e) => {
+                      const touch = e.touches[0];
+                      const startX = (e.currentTarget as any).startX;
+                      if (startX === undefined) return;
+                      
+                      const diff = touch.clientX - startX;
+                      
+                      if (Math.abs(diff) > 50) {
+                        if (diff > 0) { // Right swipe - previous
+                          setGalleryIndex(prev => prev === 0 ? fullViewMediaPost.gallery_data!.items.length - 1 : prev - 1);
+                        } else { // Left swipe - next
+                          setGalleryIndex(prev => prev === fullViewMediaPost.gallery_data!.items.length - 1 ? 0 : prev + 1);
+                        }
+                        // Reset startX to avoid rapid switching
+                        (e.currentTarget as any).startX = touch.clientX;
+                      }
+                    }}
+                  >
+                    <img 
+                      src={fullViewMediaPost.media_metadata[fullViewMediaPost.gallery_data.items[galleryIndex].media_id].s.u.replace(/&amp;/g, '&')} 
+                      alt="" 
+                      className="w-full h-full object-contain"
+                      referrerPolicy="no-referrer"
+                    />
+                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/50 px-2 py-1 rounded text-white text-xs">
+                      {galleryIndex + 1} / {fullViewMediaPost.gallery_data.items.length}
+                    </div>
+                  </div>
+                ) : fullViewMediaPost.is_video && fullViewMediaPost.media?.reddit_video ? (
+                  <div className="w-full h-full flex items-center justify-center">
                     <VideoPlayer 
                       src={fullViewMediaPost.media.reddit_video.fallback_url} 
                       hlsUrl={fullViewMediaPost.media.reddit_video.hls_url}
                       autoPlay={false}
                       muted={false}
-                      className="w-full h-full object-contain"
+                      className="w-full h-full"
                     />
                   </div>
-                ) : fullViewMediaPost.post_hint === 'image' || fullViewMediaPost.url?.match(/\.(jpg|jpeg|png|gif)$/i) ? (
-                  <img 
-                    src={fullViewMediaPost.url} 
-                    alt="" 
-                    className="max-w-full max-h-full object-contain rounded-lg"
-                    referrerPolicy="no-referrer"
-                  />
-                ) : (
-                  <div className="w-full h-full bg-[#1A1A1B] rounded-2xl overflow-hidden flex flex-col">
-                    <iframe 
-                      src={fullViewMediaPost.url} 
-                      className="w-full h-full border-none"
-                      title="Website Preview"
-                      sandbox="allow-scripts allow-same-origin allow-popups"
-                    />
-                    <div className="p-4 bg-[#030303] border-t border-white/5 flex items-center justify-between">
-                      <div className="flex flex-col">
-                        <span className="text-xs text-[#818384] uppercase font-bold tracking-wider">Previewing</span>
-                        <span className="text-sm text-[#D7DADC] truncate max-w-[200px] md:max-w-md">{fullViewMediaPost.url}</span>
+                ) : (() => {
+                  const streamableId = getStreamableId(fullViewMediaPost.url);
+                  if (streamableId) {
+                    return (
+                      <div className="w-full h-full relative bg-black">
+                        <ReactPlayer
+                          url={fullViewMediaPost.url}
+                          playing={true}
+                          muted={true}
+                          controls={true}
+                          width="100%"
+                          height="100%"
+                          style={{ position: 'absolute', top: 0, left: 0 }}
+                        />
                       </div>
-                      <a 
-                        href={fullViewMediaPost.url} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="px-4 py-2 bg-[#FF4500] text-white rounded-lg text-sm font-bold"
-                      >
-                        Open in Browser
-                      </a>
+                    );
+                  }
+                  if (fullViewMediaPost.post_hint === 'image' || fullViewMediaPost.url?.match(/\.(jpg|jpeg|png|gif)$/i)) {
+                    return (
+                      <img 
+                        src={fullViewMediaPost.url} 
+                        alt="" 
+                        className="w-full h-full object-contain"
+                        referrerPolicy="no-referrer"
+                      />
+                    );
+                  }
+                  return (
+                    <div className="w-full h-full bg-bg-secondary rounded-2xl overflow-hidden flex flex-col">
+                      <iframe 
+                        src={fullViewMediaPost.url} 
+                        className="w-full h-full border-none"
+                        title="Website Preview"
+                        sandbox="allow-scripts allow-same-origin allow-popups"
+                      />
+                      <div className="p-4 bg-bg-primary border-t border-border-color flex items-center justify-between">
+                        <div className="flex flex-col">
+                          <span className="text-xs text-text-secondary uppercase font-bold tracking-wider">Previewing</span>
+                          <span className="text-sm text-text-primary truncate max-w-[200px] md:max-w-md">{fullViewMediaPost.url}</span>
+                        </div>
+                        <a 
+                          href={fullViewMediaPost.url} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="px-4 py-2 bg-[#FF4500] text-white rounded-lg text-sm font-bold"
+                        >
+                          Open in Browser
+                        </a>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()
+                }
               </div>
             </motion.div>
           </motion.div>
@@ -1110,12 +1212,12 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center bg-[#030303] text-[#D7DADC]">
+        <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center bg-bg-primary text-text-primary">
           <div className="w-16 h-16 bg-red-100/10 text-red-500 rounded-full flex items-center justify-center mb-4">
             <X size={32} />
           </div>
-          <h1 className="text-xl font-bold text-[#D7DADC] mb-2">Something went wrong</h1>
-          <p className="text-[#818384] mb-6 max-w-md">
+          <h1 className="text-xl font-bold text-text-primary mb-2">Something went wrong</h1>
+          <p className="text-text-secondary mb-6 max-w-md">
             The application encountered an unexpected error. This might be due to corrupted local data.
           </p>
           <div className="flex flex-col gap-3 w-full max-w-xs">
@@ -1130,13 +1232,13 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
                 localStorage.clear();
                 window.location.reload();
               }}
-              className="w-full py-2 bg-[#1A1A1B] text-red-500 rounded-md font-medium hover:bg-red-500/10 transition-colors"
+              className="w-full py-2 bg-bg-secondary text-red-500 rounded-md font-medium hover:bg-red-500/10 transition-colors"
             >
               Clear Data & Reset
             </button>
           </div>
           {process.env.NODE_ENV !== 'production' && (
-            <pre className="mt-8 p-4 bg-[#1A1A1B] rounded text-left text-xs overflow-auto max-w-full text-[#818384]">
+            <pre className="mt-8 p-4 bg-bg-secondary rounded text-left text-xs overflow-auto max-w-full text-text-secondary">
               {this.state.error?.toString()}
             </pre>
           )}
@@ -1154,10 +1256,10 @@ function MobileNavItem({ icon, label, active, onClick }: { icon: React.ReactNode
       onClick={onClick}
       className="flex flex-col items-center gap-1 min-w-[64px] active:scale-95 transition-transform cursor-pointer touch-manipulation"
     >
-      <div className={`p-1.5 rounded-md transition-all duration-200 ${active ? 'bg-[#272729] text-[#D7DADC]' : 'text-[#818384]'}`}>
+      <div className={`p-1.5 rounded-md transition-all duration-200 ${active ? 'bg-bg-tertiary text-text-primary' : 'text-text-secondary'}`}>
         {icon}
       </div>
-      <span className={`text-[10px] font-medium transition-colors ${active ? 'text-[#D7DADC]' : 'text-[#818384]'}`}>
+      <span className={`text-[10px] font-medium transition-colors ${active ? 'text-text-primary' : 'text-text-secondary'}`}>
         {label}
       </span>
     </button>
