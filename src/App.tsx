@@ -953,7 +953,7 @@ export default function App() {
       </div>
 
       {/* Mobile Navigation Bar */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-bg-primary/95 backdrop-blur-md px-4 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] flex items-center justify-around z-50 shadow-[0_-1px_3px_rgba(0,0,0,0.2)] transform translate-z-0">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-bg-primary/95 dark:bg-black backdrop-blur-md px-4 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] flex items-center justify-around z-50 shadow-[0_-1px_3px_rgba(0,0,0,0.2)] transform translate-z-0">
         <MobileNavItem icon={<Home size={20} />} label="Home" active={subreddit === 'home' && view === 'feed'} onClick={() => handleSubredditChange('home')} />
         <MobileNavItem icon={<TrendingUp size={20} />} label="Popular" active={subreddit === 'popular' && view === 'feed'} onClick={() => handleSubredditChange('popular')} />
         <MobileNavItem icon={<Globe size={20} />} label="Browse" active={showSubreddits} onClick={() => setShowSubreddits(true)} />

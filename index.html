@@ -6,6 +6,15 @@
     <meta name="theme-color" content="#030303" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <script>
+      const updateThemeColor = () => {
+        const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const metaThemeColor = document.querySelector('meta[name="theme-color"]');
+        metaThemeColor.setAttribute('content', isDark ? '#030303' : '#ffffff');
+      };
+      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', updateThemeColor);
+      updateThemeColor();
+    </script>
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
     <link rel="manifest" href="/manifest.json" />
     <link rel="icon" href="https://api.dicebear.com/7.x/initials/png?seed=M&backgroundColor=000000&size=32" type="image/png" />
@@ -16,4 +25,3 @@
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
-
