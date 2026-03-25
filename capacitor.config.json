@@ -1,6 +1,6 @@
 {
-  "appId": "org.cygnusx1.continuum.web",
-  "appName": "Continuum Web",
+  "appId": "com.minute.app",
+  "appName": "Minute",
   "webDir": "dist",
   "bundledWebRuntime": false
 }

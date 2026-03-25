@@ -1,50 +1,243 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Roboto:wght@400;500;700&display=swap');
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-sans: "Roboto", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Outfit", ui-sans-serif, system-ui, sans-serif;
   
-  --color-bg-primary: var(--bg-primary);
-  --color-bg-secondary: var(--bg-secondary);
-  --color-bg-tertiary: var(--bg-tertiary);
-  --color-text-primary: var(--text-primary);
-  --color-text-secondary: var(--text-secondary);
-  --color-border-color: var(--border-color);
-  --color-hover-bg: var(--hover-bg);
+  --color-bg-primary: var(--md-sys-color-surface);
+  --color-bg-secondary: var(--md-sys-color-surface-container-low);
+  --color-bg-tertiary: var(--md-sys-color-surface-container);
+  --color-bg-highest: var(--md-sys-color-surface-container-highest);
+  --color-text-primary: var(--md-sys-color-on-surface);
+  --color-text-secondary: var(--md-sys-color-on-surface-variant);
+  --color-border-color: var(--md-sys-color-outline-variant);
+  --color-hover-bg: var(--md-sys-color-surface-container-high);
+  
+  --color-level-0-master: var(--level-0-master);
+  --color-level-0-master-button: var(--level-0-master-button);
+  --color-level-0-alt: var(--level-0-alt);
+  --color-level-0-alt-button: var(--level-0-alt-button);
+  --color-level-1-master: var(--level-1-master);
+  --color-level-1-master-button: var(--level-1-master-button);
+  --color-level-1-alt: var(--level-1-alt);
+  --color-level-1-alt-button: var(--level-1-alt-button);
+  --color-level-2-master: var(--level-2-master);
+  --color-level-2-master-button: var(--level-2-master-button);
+  --color-level-2-alt: var(--level-2-alt);
+  --color-level-2-alt-button: var(--level-2-alt-button);
+  --color-level-3-master: var(--level-3-master);
+  --color-level-3-master-button: var(--level-3-master-button);
+  --color-level-3-alt: var(--level-3-alt);
+  --color-level-3-alt-button: var(--level-3-alt-button);
+  --color-level-4-master: var(--level-4-master);
+  --color-level-4-master-button: var(--level-4-master-button);
+  --color-level-4-alt: var(--level-4-alt);
+  --color-level-4-alt-button: var(--level-4-alt-button);
+  --color-level-5-master: var(--level-5-master);
+  --color-level-5-master-button: var(--level-5-master-button);
+  --color-level-5-alt: var(--level-5-alt);
+  --color-level-5-alt-button: var(--level-5-alt-button);
+  --color-level-6-master: var(--level-6-master);
+  --color-level-6-master-button: var(--level-6-master-button);
+  --color-level-6-alt: var(--level-6-alt);
+  --color-level-6-alt-button: var(--level-6-alt-button);
+  
+  --color-primary: var(--md-sys-color-primary);
+  --color-on-primary: var(--md-sys-color-on-primary);
+  --color-primary-container: var(--md-sys-color-primary-container);
+  --color-on-primary-container: var(--md-sys-color-on-primary-container);
+  
+  --color-secondary-container: var(--md-sys-color-secondary-container);
+  --color-on-secondary-container: var(--md-sys-color-on-secondary-container);
+  
+  --color-error: var(--md-sys-color-error);
+  --color-on-error: var(--md-sys-color-on-error);
+  --color-error-container: var(--md-sys-color-error-container);
+  --color-on-error-container: var(--md-sys-color-on-error-container);
 }
 
 @layer base {
   :root {
-    --bg-primary: #ffffff;
-    --bg-secondary: #f6f7f8;
-    --bg-tertiary: #e2e2e2;
-    --text-primary: #1c1c1c;
-    --text-secondary: #787c7e;
-    --border-color: rgba(0,0,0,0.1);
-    --hover-bg: rgba(0,0,0,0.05);
+    /* Light Theme - Warm Cream & Terracotta */
+    --md-sys-color-primary: #A34A38;
+    --md-sys-color-on-primary: #FFFFFF;
+    --md-sys-color-primary-container: #FFDAD5;
+    --md-sys-color-on-primary-container: #410001;
+    
+    --md-sys-color-secondary-container: #FFDAD5;
+    --md-sys-color-on-secondary-container: #2D1614;
+    
+    --md-sys-color-error: #BA1A1A;
+    --md-sys-color-on-error: #FFFFFF;
+    --md-sys-color-error-container: #FFDAD6;
+    --md-sys-color-on-error-container: #410002;
+    
+    --md-sys-color-surface: #FCFBF7; /* Creamy White */
+    --md-sys-color-surface-dim: #F2F0E6;
+    --md-sys-color-surface-container-lowest: #FFFFFF;
+    --md-sys-color-surface-container-low: #F7F5ED;
+    --md-sys-color-surface-container: #F2F0E6;
+    --md-sys-color-surface-container-high: #EBE9DE;
+    --md-sys-color-surface-container-highest: #E4E2D6;
+    
+    --md-sys-color-on-surface: #1C1C17;
+    --md-sys-color-on-surface-variant: #49473F;
+    --md-sys-color-outline: #7A776D;
+    --md-sys-color-outline-variant: #CBC7BA;
+
+    /* Level Colors - Light */
+    --level-0-master: #FEF3E2;
+    --level-0-master-button: #F2E6D4;
+    --level-0-alt: #FFF9F0;
+    --level-0-alt-button: #F5EFE6;
+    --level-1-master: #F7F5ED;
+    --level-1-master-button: #EBE9DE;
+    --level-1-alt: #F0EEE4;
+    --level-1-alt-button: #E4E2D6;
+    --level-2-master: #EBE9DE;
+    --level-2-master-button: #DEDBCB;
+    --level-2-alt: #F2F0E6;
+    --level-2-alt-button: #E6E4D8;
+    --level-3-master: #E9E6F0;
+    --level-3-master-button: #DEDAE6;
+    --level-3-alt: #F2F0F7;
+    --level-3-alt-button: #E6E4EB;
+    --level-4-master: #F2EBE6;
+    --level-4-master-button: #E6DED8;
+    --level-4-alt: #F9F5F2;
+    --level-4-alt-button: #EDE9E6;
+    --level-5-master: #E6F0E9;
+    --level-5-master-button: #D8E6DD;
+    --level-5-alt: #F0F7F2;
+    --level-5-alt-button: #E6F0E9;
+    --level-6-master: #E6EBF2;
+    --level-6-master-button: #D8DFE6;
+    --level-6-alt: #F0F5F9;
+    --level-6-alt-button: #E6EBF2;
+
+    /* M3 Motion Tokens */
+    --md-sys-motion-duration-short4: 200ms;
+    --md-sys-motion-easing-linear: linear;
   }
   
   @media (prefers-color-scheme: dark) {
     :root:not(.light) {
-      --bg-primary: #030303;
-      --bg-secondary: #1A1A1B;
-      --bg-tertiary: #272729;
-      --text-primary: #D7DADC;
-      --text-secondary: #818384;
-      --border-color: rgba(255,255,255,0.05);
-      --hover-bg: rgba(255,255,255,0.05);
+      --md-sys-color-primary: #FFB4AB;
+      --md-sys-color-on-primary: #5F1414;
+      --md-sys-color-primary-container: #7D2A28;
+      --md-sys-color-on-primary-container: #FFDAD6;
+      
+      --md-sys-color-secondary-container: #5D3F3C;
+      --md-sys-color-on-secondary-container: #FFDAD6;
+      
+      --md-sys-color-error: #FFB4AB;
+      --md-sys-color-on-error: #690005;
+      --md-sys-color-error-container: #93000A;
+      --md-sys-color-on-error-container: #FFDAD6;
+      
+      --md-sys-color-surface: #1C1B17;
+      --md-sys-color-surface-dim: #141310;
+      --md-sys-color-surface-container-lowest: #0F0E0C;
+      --md-sys-color-surface-container-low: #23211C;
+      --md-sys-color-surface-container: #2D2A24;
+      --md-sys-color-surface-container-high: #38342D;
+      --md-sys-color-surface-container-highest: #433E36;
+      
+      --md-sys-color-on-surface: #E6E2D9;
+      --md-sys-color-on-surface-variant: #CBC7BA;
+      --md-sys-color-outline: #949186;
+      --md-sys-color-outline-variant: #49473F;
+
+      /* Level Colors - Dark */
+      --level-0-master: #3D362A;
+      --level-0-master-button: #4D4435;
+      --level-0-alt: #332F28;
+      --level-0-alt-button: #403B32;
+      --level-1-master: #2D2B24;
+      --level-1-master-button: #38362D;
+      --level-1-alt: #25231E;
+      --level-1-alt-button: #2E2B25;
+      --level-2-master: #23221C;
+      --level-2-master-button: #2B2A23;
+      --level-2-alt: #2A2821;
+      --level-2-alt-button: #353229;
+      --level-3-master: #26242D;
+      --level-3-master-button: #302E38;
+      --level-3-alt: #2D2B33;
+      --level-3-alt-button: #383640;
+      --level-4-master: #2D2624;
+      --level-4-master-button: #38302E;
+      --level-4-alt: #332B29;
+      --level-4-alt-button: #403633;
+      --level-5-master: #242D28;
+      --level-5-master-button: #2E3832;
+      --level-5-alt: #29332D;
+      --level-5-alt-button: #334038;
+      --level-6-master: #24282D;
+      --level-6-master-button: #2E3238;
+      --level-6-alt: #292D33;
+      --level-6-alt-button: #333840;
     }
   }
 
   :root.dark {
-    --bg-primary: #030303;
-    --bg-secondary: #1A1A1B;
-    --bg-tertiary: #272729;
-    --text-primary: #D7DADC;
-    --text-secondary: #818384;
-    --border-color: rgba(255,255,255,0.05);
-    --hover-bg: rgba(255,255,255,0.05);
+    --md-sys-color-primary: #FFB4AB;
+    --md-sys-color-on-primary: #5F1414;
+    --md-sys-color-primary-container: #7D2A28;
+    --md-sys-color-on-primary-container: #FFDAD6;
+    
+    --md-sys-color-secondary-container: #5D3F3C;
+    --md-sys-color-on-secondary-container: #FFDAD6;
+    
+    --md-sys-color-error: #FFB4AB;
+    --md-sys-color-on-error: #690005;
+    --md-sys-color-error-container: #93000A;
+    --md-sys-color-on-error-container: #FFDAD6;
+    
+    --md-sys-color-surface: #1C1B17;
+    --md-sys-color-surface-dim: #141310;
+    --md-sys-color-surface-container-lowest: #0F0E0C;
+    --md-sys-color-surface-container-low: #23211C;
+    --md-sys-color-surface-container: #2D2A24;
+    --md-sys-color-surface-container-high: #38342D;
+    --md-sys-color-surface-container-highest: #433E36;
+    
+    --md-sys-color-on-surface: #E6E2D9;
+    --md-sys-color-on-surface-variant: #CBC7BA;
+    --md-sys-color-outline: #949186;
+    --md-sys-color-outline-variant: #49473F;
+
+    /* Level Colors - Dark */
+    --level-0-master: #3D362A;
+    --level-0-master-button: #4D4435;
+    --level-0-alt: #332F28;
+    --level-0-alt-button: #403B32;
+    --level-1-master: #2D2B24;
+    --level-1-master-button: #38362D;
+    --level-1-alt: #25231E;
+    --level-1-alt-button: #2E2B25;
+    --level-2-master: #23221C;
+    --level-2-master-button: #2B2A23;
+    --level-2-alt: #2A2821;
+    --level-2-alt-button: #353229;
+    --level-3-master: #26242D;
+    --level-3-master-button: #302E38;
+    --level-3-alt: #2D2B33;
+    --level-3-alt-button: #383640;
+    --level-4-master: #2D2624;
+    --level-4-master-button: #38302E;
+    --level-4-alt: #332B29;
+    --level-4-alt-button: #403633;
+    --level-5-master: #242D28;
+    --level-5-master-button: #2E3832;
+    --level-5-alt: #29332D;
+    --level-5-alt-button: #334038;
+    --level-6-master: #24282D;
+    --level-6-master-button: #2E3238;
+    --level-6-alt: #292D33;
+    --level-6-alt-button: #333840;
   }
 
   html, body, #root {
@@ -53,7 +246,7 @@
     min-height: -webkit-fill-available;
   }
   body {
-    @apply bg-bg-primary text-text-primary font-sans antialiased;
+    @apply bg-bg-primary text-text-primary font-sans antialiased selection:bg-primary selection:text-on-primary leading-snug;
   }
 }
 
@@ -93,6 +286,21 @@
   }
   .social-embed-content blockquote a:hover {
     text-decoration: underline;
+  }
+}
+
+@keyframes squiggly-dash {
+  0% {
+    stroke-dasharray: 5, 130;
+    stroke-dashoffset: 0;
+  }
+  50% {
+    stroke-dasharray: 80, 130;
+    stroke-dashoffset: -25;
+  }
+  100% {
+    stroke-dasharray: 5, 130;
+    stroke-dashoffset: -113;
   }
 }
 

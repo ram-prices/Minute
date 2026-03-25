@@ -3,11 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { RedditPost, fetchUserPosts, fetchUserProfile } from '../services/reddit';
 import PostCard from './PostCard';
-import { ArrowLeft, Loader2, User, Calendar, Award } from 'lucide-react';
+import { Ripple } from './Ripple';
+import { ArrowLeft, User, Calendar, Award } from 'lucide-react';
 import { motion } from 'motion/react';
+import { SquigglyLoader } from './SquigglyLoader';
+import { decodeHtml } from '../lib/decode';
 
 interface UserProfileProps {
   username: string;
@@ -31,6 +34,9 @@ export default function UserProfile({
   const [loading, setLoading] = useState(true);
   const [after, setAfter] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [showHeader, setShowHeader] = useState(true);
+  const lastScrollY = useRef(0);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -49,9 +55,25 @@ export default function UserProfile({
     }
   }, [username]);
 
+  // Scroll listener for hiding/showing header
   useEffect(() => {
     loadData();
-  }, [loadData]);
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      const currentScrollY = container.scrollTop;
+      if (currentScrollY > lastScrollY.current && currentScrollY > 100) {
+        setShowHeader(false);
+      } else {
+        setShowHeader(true);
+      }
+      lastScrollY.current = currentScrollY;
+    };
+
+    container.addEventListener('scroll', handleScroll);
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, []);
 
   const loadMore = async () => {
     if (!after || loadingMore) return;
@@ -69,30 +91,36 @@ export default function UserProfile({
 
   if (loading) {
     return (
-      <div className="h-full flex flex-col items-center justify-center bg-bg-primary text-gray-400">
-        <Loader2 size={32} className="animate-spin mb-4" />
-        <p className="text-sm font-medium uppercase tracking-wider">Loading Profile...</p>
+      <div className="h-full flex flex-col items-center justify-center bg-bg-primary text-text-secondary">
+        <SquigglyLoader size={32} className="mb-4 text-primary" />
+        <p className="text-sm font-bold uppercase tracking-wider">Loading Profile...</p>
       </div>
     );
   }
 
   return (
-    <div className="h-full flex flex-col bg-bg-primary overflow-hidden">
-      <header className="sticky top-0 bg-bg-primary/90 backdrop-blur-md p-4 md:px-6 flex items-center gap-4 z-10">
+    <div className="h-full flex flex-col bg-bg-primary overflow-hidden relative">
+      <motion.header 
+        initial={false}
+        animate={{ y: showHeader ? 0 : -100 }}
+        transition={{ duration: 0.3, ease: [0.2, 0, 0, 1] }}
+        className="absolute top-0 left-0 right-0 bg-bg-primary/90 backdrop-blur-md p-4 md:px-6 flex items-center gap-4 z-20"
+      >
         <button 
           onClick={onClose}
-          className="p-1 -ml-1 text-text-secondary hover:text-text-primary transition-colors"
+          className="relative p-2 -ml-2 text-text-secondary hover:text-text-primary hover:bg-hover-bg rounded-full transition-all active:scale-90 overflow-hidden"
         >
-          <ArrowLeft size={22} />
+          <ArrowLeft size={24} />
+          <Ripple />
         </button>
-        <h2 className="font-bold text-text-primary">u/{username}</h2>
-      </header>
+        <h2 className="font-display font-medium text-xl text-text-primary">u/{username}</h2>
+      </motion.header>
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto pt-[72px]" ref={scrollContainerRef}>
         {/* Profile Header */}
-        <div className="p-6 md:p-8 flex flex-col gap-6 border-b border-border-color">
+        <div className="p-6 md:p-8 flex flex-col gap-6 bg-bg-secondary">
           <div className="flex items-center gap-6">
-            <div className="w-20 h-20 md:w-24 md:h-24 rounded-full bg-bg-secondary overflow-hidden shrink-0">
+            <div className="w-20 h-20 md:w-24 md:h-24 rounded-full bg-bg-tertiary overflow-hidden shrink-0">
               {profile?.icon_img ? (
                 <img 
                   src={profile.icon_img.split('?')[0]} 
@@ -101,20 +129,20 @@ export default function UserProfile({
                   referrerPolicy="no-referrer"
                 />
               ) : (
-                <div className="w-full h-full flex items-center justify-center text-3xl font-bold text-white">
+                <div className="w-full h-full flex items-center justify-center text-3xl font-display font-bold text-text-secondary">
                   {username.charAt(0).toUpperCase()}
                 </div>
               )}
             </div>
             <div className="flex flex-col gap-1">
-              <h1 className="text-2xl font-bold text-text-primary">u/{username}</h1>
-              <div className="flex flex-wrap gap-4 text-sm text-text-secondary">
-                <div className="flex items-center gap-1.5">
-                  <Award size={16} />
+              <h1 className="text-2xl md:text-3xl font-display font-bold text-text-primary tracking-tight">u/{username}</h1>
+              <div className="flex flex-wrap gap-4 text-sm font-medium mt-1">
+                <div className="flex items-center gap-1.5 bg-secondary-container text-on-secondary-container px-3 py-1.5 rounded-full">
+                  <Award size={16} className="text-primary" />
                   <span>{profile?.link_karma + profile?.comment_karma || 0} karma</span>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <Calendar size={16} />
+                <div className="flex items-center gap-1.5 bg-secondary-container text-on-secondary-container px-3 py-1.5 rounded-full">
+                  <Calendar size={16} className="text-primary" />
                   <span>Joined {new Date(profile?.created_utc * 1000).toLocaleDateString()}</span>
                 </div>
               </div>
@@ -122,18 +150,18 @@ export default function UserProfile({
           </div>
           
           {profile?.public_description && (
-            <p className="text-sm text-text-primary leading-relaxed max-w-2xl">
-              {profile.public_description}
+            <p className="text-base text-text-primary leading-relaxed max-w-2xl bg-bg-tertiary p-4 rounded-2xl">
+              {decodeHtml(profile.public_description)}
             </p>
           )}
         </div>
 
         {/* User Posts */}
-        <div className="p-0 md:p-8 max-w-4xl mx-auto w-full flex flex-col gap-0 md:gap-6">
-          <h3 className="px-4 md:px-0 text-lg font-semibold text-text-primary mb-2 md:mb-0">Posts</h3>
+        <div className="p-2 md:p-8 max-w-4xl mx-auto w-full flex flex-col gap-3 md:gap-6 mt-4">
+          <h3 className="px-4 md:px-0 text-xl font-display font-bold text-text-primary mb-2 md:mb-0">Posts</h3>
           {posts.length === 0 ? (
-            <div className="p-12 text-center text-text-secondary">
-              <p>No posts yet.</p>
+            <div className="p-12 text-center text-text-secondary bg-bg-tertiary rounded-3xl mx-4 md:mx-0">
+              <p className="font-medium">No posts yet.</p>
             </div>
           ) : (
             <>
@@ -152,9 +180,10 @@ export default function UserProfile({
                 <button 
                   onClick={loadMore}
                   disabled={loadingMore}
-                  className="mx-4 md:mx-0 py-4 bg-bg-secondary text-text-primary rounded-xl text-sm font-medium hover:bg-bg-tertiary transition-all mb-8 flex items-center justify-center gap-2"
+                  className="relative mx-4 md:mx-0 py-4 bg-bg-secondary text-text-primary rounded-full text-sm font-bold hover:bg-bg-tertiary transition-all mb-8 flex items-center justify-center gap-2 active:scale-95 overflow-hidden"
                 >
-                  {loadingMore ? <Loader2 size={18} className="animate-spin" /> : 'Load More'}
+                  {loadingMore ? <SquigglyLoader size={18} /> : 'Load More'}
+                  <Ripple />
                 </button>
               )}
             </>

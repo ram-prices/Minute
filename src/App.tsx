@@ -9,10 +9,12 @@ import PostCard from './components/PostCard';
 import PostDetail from './components/PostDetail';
 import VideoPlayer from './components/VideoPlayer';
 import UserProfile from './components/UserProfile';
-import { RedditPost, fetchSubreddit, setRedditAuth, getAuthUrl, fetchMySubreddits, getStreamableId } from './services/reddit';
-import { Search, RefreshCw, Loader2, Home, TrendingUp, Hash, Settings, X, Smartphone, Globe, LogIn, LogOut, Info, User, UserCircle, Trash2, ArrowLeft, Moon } from 'lucide-react';
+import { Ripple } from './components/Ripple';
+import { RedditPost, fetchSubreddit, setRedditAuth, getAuthUrl, fetchMySubreddits, getStreamableId, preloadPostDetails } from './services/reddit';
+import { Search, RefreshCw, Home, TrendingUp, Hash, Settings, X, Smartphone, Globe, LogIn, LogOut, Info, User, UserCircle, Trash2, ArrowLeft, Moon } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ReactPlayer from 'react-player';
+import { SquigglyLoader } from './components/SquigglyLoader';
 
 export default function App() {
   const [view, setView] = useState<'feed' | 'settings' | 'profile'>('feed');
@@ -75,8 +77,32 @@ export default function App() {
       return [];
     }
   });
+  const [showHeader, setShowHeader] = useState(true);
+  const lastScrollY = useRef(0);
   const observerTarget = useRef<HTMLDivElement>(null);
   const afterRef = useRef<string | null>(null);
+  const scrollPositionRef = useRef<number>(0);
+  const feedContainerRef = useRef<HTMLElement>(null);
+
+  // Scroll listener for hiding/showing header
+  useEffect(() => {
+    const container = feedContainerRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      const currentScrollY = container.scrollTop;
+      // Only hide if scrolled down more than 100px
+      if (currentScrollY > lastScrollY.current && currentScrollY > 100) {
+        setShowHeader(false);
+      } else {
+        setShowHeader(true);
+      }
+      lastScrollY.current = currentScrollY;
+    };
+
+    container.addEventListener('scroll', handleScroll);
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, [view, selectedPost]);
 
   // Prevent browser context menu on elements with .no-callout
   useEffect(() => {
@@ -105,30 +131,20 @@ export default function App() {
   // Material You / Mica Styling Simulation
   useEffect(() => {
     const root = document.documentElement;
-    // Base Material You colors for dark theme
-    root.style.setProperty('--m3-primary', '#FF4500');
-    root.style.setProperty('--m3-on-primary', '#FFFFFF');
-    root.style.setProperty('--m3-primary-container', '#4A1D00');
-    root.style.setProperty('--m3-on-primary-container', '#FFDBCB');
-    root.style.setProperty('--m3-surface', 'rgba(26, 26, 27, 0.7)'); // Translucent for Mica
-    root.style.setProperty('--m3-on-surface', '#D7DADC');
-    root.style.setProperty('--m3-surface-variant', 'rgba(39, 39, 41, 0.6)');
-    root.style.setProperty('--m3-on-surface-variant', '#818384');
-    root.style.setProperty('--m3-background', '#030303');
     
     // Set theme color for mobile browser UI
     const metaThemeColor = document.querySelector('meta[name="theme-color"]');
     if (metaThemeColor) {
-      metaThemeColor.setAttribute('content', '#030303');
+      metaThemeColor.setAttribute('content', 'var(--md-sys-color-surface)');
     } else {
       const meta = document.createElement('meta');
       meta.name = 'theme-color';
-      meta.content = '#030303';
+      meta.content = 'var(--md-sys-color-surface)';
       document.head.appendChild(meta);
     }
 
     // Set accent color for Material You feel
-    root.style.setProperty('accent-color', '#FF4500');
+    root.style.setProperty('accent-color', 'var(--md-sys-color-primary)');
   }, []);
 
   useEffect(() => {
@@ -163,12 +179,14 @@ export default function App() {
         if (state.postId === null) setSelectedPost(null);
         if (state.showSubreddits !== undefined) setShowSubreddits(state.showSubreddits);
         if (state.selectedUser === null) setSelectedUser(null);
+        if (state.fullViewMediaPost === null) setFullViewMediaPost(null);
       } else {
         // Default state
         setView('feed');
         setSelectedPost(null);
         setShowSubreddits(false);
         setSelectedUser(null);
+        setFullViewMediaPost(null);
       }
       
       // Reset the ref after the state updates have been processed
@@ -186,7 +204,8 @@ export default function App() {
         subreddit, 
         postId: null, 
         showSubreddits: false,
-        selectedUser: null
+        selectedUser: null,
+        fullViewMediaPost: null
       }, '');
     }
 
@@ -195,6 +214,21 @@ export default function App() {
       window.removeEventListener('popstate', handlePopState);
     };
   }, []);
+
+  // Restore scroll position when returning to feed
+  useEffect(() => {
+    if (view === 'feed' && !selectedPost) {
+      // Use a small timeout to ensure DOM has updated and framer-motion has finished layout
+      const timer = setTimeout(() => {
+        requestAnimationFrame(() => {
+          if (feedContainerRef.current) {
+            feedContainerRef.current.scrollTo(0, scrollPositionRef.current);
+          }
+        });
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [view, selectedPost]);
 
   // Sync state changes to history
   useEffect(() => {
@@ -206,7 +240,8 @@ export default function App() {
       subreddit, 
       postId: selectedPost?.id || null, 
       showSubreddits,
-      selectedUser
+      selectedUser,
+      fullViewMediaPost: fullViewMediaPost?.id || null
     };
 
     // Check if we should push a new state
@@ -215,12 +250,13 @@ export default function App() {
       currentState.subreddit !== newState.subreddit || 
       currentState.postId !== newState.postId || 
       currentState.showSubreddits !== newState.showSubreddits ||
-      currentState.selectedUser !== newState.selectedUser;
+      currentState.selectedUser !== newState.selectedUser ||
+      currentState.fullViewMediaPost !== newState.fullViewMediaPost;
 
     if (hasChanged) {
       window.history.pushState(newState, '');
     }
-  }, [view, subreddit, selectedPost, showSubreddits, selectedUser]);
+  }, [view, subreddit, selectedPost, showSubreddits, selectedUser, fullViewMediaPost]);
 
   const handleInstallClick = async () => {
     if (!deferredPrompt) return;
@@ -250,6 +286,17 @@ export default function App() {
       setPosts(prev => append ? [...prev, ...newPosts] : newPosts);
       afterRef.current = newAfter;
       setAfter(newAfter); // Still keep state for UI if needed, but use ref for logic
+      
+      // Preload the top 5 posts for faster viewing, then the next 5
+      if (!append && newPosts.length > 0) {
+        (async () => {
+          const firstBatch = newPosts.slice(0, 5);
+          await Promise.all(firstBatch.map(post => post.permalink ? preloadPostDetails(post.permalink) : Promise.resolve()));
+          
+          const secondBatch = newPosts.slice(5, 10);
+          await Promise.all(secondBatch.map(post => post.permalink ? preloadPostDetails(post.permalink) : Promise.resolve()));
+        })();
+      }
     } catch (error) {
       console.error('Failed to load posts', error);
     } finally {
@@ -466,16 +513,80 @@ export default function App() {
     }
   };
 
+  const handleMediaClick = (post: RedditPost, index?: number) => {
+    const isGallery = post.is_gallery && post.gallery_data?.items && post.media_metadata;
+    const isVideo = post.is_video && post.media?.reddit_video;
+    const isImage = post.post_hint === 'image' || post.url?.match(/\.(jpg|jpeg|png|gif)$/i);
+    const streamableId = getStreamableId(post.url);
+    
+    if (!isGallery && !isVideo && !isImage && !streamableId) {
+      window.open(post.url, '_blank');
+      return;
+    }
+    
+    setFullViewMediaPost(post);
+    if (index !== undefined) setGalleryIndex(index);
+  };
+
+  const closeMediaView = () => {
+    if (window.history.state?.fullViewMediaPost) {
+      window.history.back();
+    } else {
+      setFullViewMediaPost(null);
+    }
+  };
+
+  const closePostDetail = () => {
+    if (window.history.state?.postId) {
+      window.history.back();
+    } else {
+      setSelectedPost(null);
+    }
+  };
+
+  const closeSubreddits = () => {
+    if (window.history.state?.showSubreddits) {
+      window.history.back();
+    } else {
+      setShowSubreddits(false);
+    }
+  };
+
+  const closeView = () => {
+    if (window.history.state?.view && window.history.state.view !== 'feed') {
+      window.history.back();
+    } else {
+      setView('feed');
+    }
+  };
+
   const handleSubredditChange = (newSub: string) => {
-    if (newSub !== subreddit || view !== 'feed') {
+    if (newSub === subreddit && view !== 'feed') {
+      // Just return to feed without reloading
+      setView('feed');
+      setShowSubreddits(false);
+      return;
+    }
+    
+    if (newSub === subreddit && view === 'feed') {
+      // Refresh current feed
+      scrollPositionRef.current = 0;
+      feedContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+      handleRefresh();
+      setShowSubreddits(false);
+      return;
+    }
+    
+    if (newSub !== subreddit) {
       setSubredditHistory(prev => [...prev, subreddit]);
       setSubreddit(newSub);
       setView('feed');
+      setAfter(null);
+      setPosts([]);
+      setShowSubreddits(false);
+      scrollPositionRef.current = 0;
+      feedContainerRef.current?.scrollTo(0, 0);
     }
-    setAfter(null);
-    setPosts([]);
-    setShowSubreddits(false);
-    window.scrollTo(0, 0);
   };
 
   const handleBack = useCallback(() => {
@@ -494,7 +605,8 @@ export default function App() {
       setSubreddit(prevSub);
       setAfter(null);
       setPosts([]);
-      window.scrollTo(0, 0);
+      scrollPositionRef.current = 0;
+      feedContainerRef.current?.scrollTo(0, 0);
     }
   }, [selectedPost, fullViewMediaPost, subredditHistory, subreddit, view]);
 
@@ -518,14 +630,17 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <div className="flex min-h-[100dvh] bg-bg-primary text-text-primary pb-20 md:pb-0 overflow-x-hidden">
-        <div className="flex min-h-[100dvh] w-full">
+      <div className="flex h-[100dvh] bg-bg-primary text-text-primary pb-20 md:pb-0 overflow-hidden">
+        <div className="flex h-[100dvh] w-full max-w-7xl mx-auto">
           {/* Desktop Navigation Rail */}
-      <div className="hidden md:block">
+      <div className="hidden md:block h-full">
         <Sidebar 
           currentSubreddit={subreddit} 
           onSubredditChange={handleSubredditChange} 
-          onSettingsClick={() => setView('settings')}
+          onSettingsClick={() => {
+            if (view === 'feed') scrollPositionRef.current = feedContainerRef.current?.scrollTop || 0;
+            setView('settings');
+          }}
           isLoggedIn={isLoggedIn}
           onLoginClick={handleRedditLogin}
           onLogoutClick={handleRedditLogout}
@@ -535,18 +650,44 @@ export default function App() {
         />
       </div>
 
-        {/* Feed View */}
-        {view === 'feed' && (
-          <main className="flex-1 flex flex-col w-full min-w-0">
+      <div className="flex-1 relative h-full w-full min-w-0">
+        <AnimatePresence mode="popLayout" initial={false}>
+          {/* Feed View */}
+          {view === 'feed' && !selectedPost && (
+            <motion.main 
+              key="feed"
+              initial={{ opacity: 0, x: -30 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -30 }}
+              transition={{ 
+                duration: 0.5, 
+                ease: [0.2, 0, 0, 1], // M3 Emphasized
+                opacity: { duration: 0.3, ease: "linear" }
+              }}
+              className="absolute inset-0 flex flex-col w-full h-full overflow-y-auto"
+              ref={(node) => {
+                feedContainerRef.current = node;
+                if (node && scrollPositionRef.current > 0) {
+                  // Restore scroll position when mounting
+                  node.scrollTop = scrollPositionRef.current;
+                }
+              }}
+            >
             {/* Top App Bar */}
-            <header className="sticky top-0 z-40 bg-bg-primary/90 backdrop-blur-md px-4 py-3 md:px-8 md:py-4 flex items-center justify-between min-h-[56px]">
-              <AnimatePresence mode="wait">
+            <motion.header 
+              initial={false}
+              animate={{ y: showHeader ? 0 : -80 }}
+              transition={{ duration: 0.3, ease: [0.2, 0, 0, 1] }}
+              className="sticky top-0 z-40 bg-bg-primary/90 backdrop-blur-md px-4 flex items-center justify-between h-16 md:h-20 md:px-8 shrink-0"
+            >
+              <AnimatePresence mode="popLayout">
                 {isSearchExpanded ? (
                   <motion.div 
                     key="search-expanded"
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.2, ease: "linear" }}
                     className="flex-1 flex items-center gap-2"
                   >
                     <button 
@@ -555,12 +696,13 @@ export default function App() {
                         setSearchQuery('');
                         setShowSearchResults(false);
                       }}
-                      className="p-2 text-text-secondary hover:text-text-primary"
+                      className="relative p-2 text-text-secondary hover:text-text-primary hover:bg-hover-bg rounded-full transition-all active:scale-90 overflow-hidden"
                     >
-                      <ArrowLeft size={20} />
+                      <ArrowLeft size={24} />
+                      <Ripple />
                     </button>
                     <div className="relative flex-1">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" size={16} />
+                      <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-text-secondary" size={20} />
                       <input 
                         autoFocus
                         type="text" 
@@ -575,16 +717,17 @@ export default function App() {
                             setIsSearchExpanded(false);
                           }
                         }}
-                        className="w-full pl-9 pr-4 py-2 bg-bg-secondary text-text-primary rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#FF4500] transition-all"
+                        className="w-full pl-12 pr-4 py-3 bg-bg-secondary text-text-primary rounded-full text-base focus:outline-none focus:ring-2 focus:ring-primary transition-all"
                       />
                       
                       <AnimatePresence>
                         {showSearchResults && searchResults.length > 0 && (
                           <motion.div 
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: 10 }}
-                            className="absolute top-full left-0 right-0 mt-2 bg-bg-secondary border border-border-color rounded-lg shadow-2xl z-50 overflow-hidden"
+                            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                            transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                            className="absolute top-full left-0 right-0 mt-3 bg-bg-secondary rounded-3xl z-50 overflow-hidden"
                           >
                             {searchResults.map((sr) => (
                               <button
@@ -595,10 +738,11 @@ export default function App() {
                                   setShowSearchResults(false);
                                   setIsSearchExpanded(false);
                                 }}
-                                className="w-full px-4 py-2.5 text-left text-sm text-text-primary hover:bg-hover-bg transition-colors border-b border-border-color last:border-none flex items-center gap-2"
+                                className="relative w-full px-5 py-3.5 text-left text-base text-text-primary hover:bg-hover-bg transition-colors flex items-center gap-3 overflow-hidden"
                               >
-                                <Hash size={14} className="text-text-secondary" />
+                                <Hash size={18} className="text-text-secondary" />
                                 <span>r/{sr}</span>
+                                <Ripple />
                               </button>
                             ))}
                           </motion.div>
@@ -612,13 +756,14 @@ export default function App() {
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
+                    transition={{ duration: 0.2, ease: "linear" }}
                     className="flex items-center justify-between w-full"
                   >
                     <div className="flex items-center gap-3">
-                      <div className="md:hidden w-8 h-8 bg-[#FF4500] rounded-md flex items-center justify-center shrink-0">
-                        <div className="w-3 h-3 bg-white rounded-full" />
+                      <div className="md:hidden w-10 h-10 bg-primary rounded-xl flex items-center justify-center shrink-0">
+                        <div className="w-4 h-4 bg-on-primary rounded-full" />
                       </div>
-                      <h1 className="text-xl font-semibold tracking-tight truncate max-w-[150px] md:max-w-none text-text-primary">
+                      <h1 className="text-xl md:text-2xl font-display font-medium tracking-tight truncate max-w-[150px] md:max-w-none text-text-primary">
                         {subreddit === 'home' ? 'Home' : `r/${subreddit}`}
                       </h1>
                     </div>
@@ -626,30 +771,33 @@ export default function App() {
                     <div className="flex items-center gap-2 md:gap-4">
                       <button 
                         onClick={() => setIsSearchExpanded(true)}
-                        className="sm:hidden p-2 text-text-secondary hover:text-text-primary hover:bg-bg-tertiary rounded-md transition-all"
+                        className="relative sm:hidden p-2.5 text-text-secondary hover:text-text-primary hover:bg-hover-bg rounded-full transition-all active:scale-90 overflow-hidden"
                       >
-                        <Search size={20} />
+                        <Search size={24} />
+                        <Ripple />
                       </button>
 
                       {!isLoggedIn && (
                         <button 
                           onClick={handleRedditLogin}
-                          className="sm:hidden p-2 text-text-primary hover:bg-bg-tertiary rounded-md transition-all"
+                          className="relative sm:hidden p-2.5 text-text-primary hover:bg-hover-bg rounded-full transition-all active:scale-90 overflow-hidden"
                         >
-                          <LogIn size={20} />
+                          <LogIn size={24} />
+                          <Ripple />
                         </button>
                       )}
                       {!isLoggedIn && (
                         <button 
                           onClick={handleRedditLogin}
-                          className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-[#D7DADC] text-[#030303] text-xs font-medium rounded-md hover:bg-[#D7DADC]/90 transition-colors"
+                          className="relative hidden sm:flex items-center gap-2 px-5 py-2.5 bg-primary text-on-primary text-sm font-bold rounded-full hover:opacity-90 transition-all active:scale-95 overflow-hidden"
                         >
-                          <LogIn size={14} />
+                          <LogIn size={18} />
                           <span>Login</span>
+                          <Ripple />
                         </button>
                       )}
                       <div className="relative hidden sm:block">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" size={16} />
+                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-text-secondary" size={18} />
                         <input 
                           type="text" 
                           placeholder="Search subreddits..." 
@@ -662,16 +810,17 @@ export default function App() {
                               setShowSearchResults(false);
                             }
                           }}
-                          className="pl-9 pr-4 py-2 bg-bg-secondary text-text-primary rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#FF4500] transition-all w-48 lg:w-64 focus:bg-bg-tertiary"
+                          className="pl-11 pr-5 py-2.5 bg-bg-secondary text-text-primary rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-primary transition-all w-56 lg:w-72 focus:bg-bg-tertiary"
                         />
                         
                         <AnimatePresence>
                           {showSearchResults && searchResults.length > 0 && (
                             <motion.div 
-                              initial={{ opacity: 0, y: 10 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              exit={{ opacity: 0, y: 10 }}
-                              className="absolute top-full left-0 right-0 mt-2 bg-bg-secondary border border-border-color rounded-lg shadow-2xl z-50 overflow-hidden"
+                              initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                              animate={{ opacity: 1, y: 0, scale: 1 }}
+                              exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                              className="absolute top-full left-0 right-0 mt-3 bg-bg-tertiary rounded-3xl z-50 overflow-hidden"
                             >
                               {searchResults.map((sr) => (
                                 <button
@@ -681,10 +830,11 @@ export default function App() {
                                     setSearchQuery('');
                                     setShowSearchResults(false);
                                   }}
-                                  className="w-full px-4 py-2.5 text-left text-sm text-text-primary hover:bg-hover-bg transition-colors border-b border-border-color last:border-none flex items-center gap-2"
+                                  className="relative w-full px-5 py-3 text-left text-sm text-text-primary hover:bg-hover-bg transition-colors flex items-center gap-3 overflow-hidden"
                                 >
-                                  <Hash size={14} className="text-text-secondary" />
+                                  <Hash size={16} className="text-text-secondary" />
                                   <span>r/{sr}</span>
+                                  <Ripple />
                                 </button>
                               ))}
                             </motion.div>
@@ -693,48 +843,55 @@ export default function App() {
                       </div>
                       <button 
                         onClick={handleRefresh}
-                        className={`p-2 text-text-secondary hover:text-text-primary hover:bg-bg-tertiary rounded-md transition-all touch-manipulation ${isRefreshing ? 'animate-spin text-text-primary' : ''}`}
+                        className={`relative p-2.5 text-text-secondary hover:text-text-primary hover:bg-hover-bg rounded-full transition-all touch-manipulation active:scale-90 overflow-hidden ${isRefreshing ? 'animate-spin text-primary' : ''}`}
                       >
-                        <RefreshCw size={20} />
+                        <RefreshCw size={24} />
+                        <Ripple />
                       </button>
                     </div>
                   </motion.div>
                 )}
               </AnimatePresence>
-            </header>
+            </motion.header>
 
             {/* Feed */}
-            <div className="p-0 md:p-8 max-w-4xl mx-auto w-full flex flex-col gap-0 md:gap-6">
+            <div className="-mt-16 md:-mt-20 pt-16 md:pt-20">
+              <div className="p-2 md:p-8 max-w-4xl mx-auto w-full flex flex-col gap-3 md:gap-6">
               {!isLoggedIn && (
                 <motion.div 
                   initial={{ opacity: 0, y: -20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="p-6 bg-gray-900 text-white rounded-xl shadow-lg flex flex-col sm:flex-row items-center justify-between gap-4"
+                  className="p-6 bg-primary-container text-on-primary-container rounded-3xl flex flex-col sm:flex-row items-center justify-between gap-4 m-4 md:m-0"
                 >
                   {!redditClientId ? (
                     <>
                       <div className="flex flex-col gap-1 text-center sm:text-left">
-                        <h3 className="font-semibold text-lg">Setup Reddit API</h3>
-                        <p className="text-sm text-gray-400">Enter your Client ID in Settings to enable account features.</p>
+                        <h3 className="font-display font-bold text-xl">Setup Reddit API</h3>
+                        <p className="text-sm opacity-80">Enter your Client ID in Settings to enable account features.</p>
                       </div>
                       <button 
-                        onClick={() => setView('settings')}
-                        className="px-6 py-2.5 bg-white text-gray-900 rounded-lg text-sm font-bold hover:bg-gray-100 transition-all shrink-0"
+                        onClick={() => {
+                          if (view === 'feed') scrollPositionRef.current = feedContainerRef.current?.scrollTop || 0;
+                          setView('settings');
+                        }}
+                        className="relative px-6 py-3 bg-primary text-on-primary rounded-full text-sm font-bold hover:opacity-90 transition-all active:scale-95 shrink-0 overflow-hidden"
                       >
                         Open Settings
+                        <Ripple />
                       </button>
                     </>
                   ) : (
                     <>
                       <div className="flex flex-col gap-1 text-center sm:text-left">
-                        <h3 className="font-semibold text-lg">Connect your Reddit account</h3>
-                        <p className="text-sm text-gray-400">Login to see your personal frontpage and subreddits.</p>
+                        <h3 className="font-display font-bold text-xl">Connect your Reddit account</h3>
+                        <p className="text-sm opacity-80">Login to see your personal frontpage and subreddits.</p>
                       </div>
                       <button 
                         onClick={handleRedditLogin}
-                        className="px-6 py-2.5 bg-white text-gray-900 rounded-lg text-sm font-bold hover:bg-gray-100 transition-all shrink-0"
+                        className="relative px-6 py-3 bg-primary text-on-primary rounded-full text-sm font-bold hover:opacity-90 transition-all active:scale-95 shrink-0 overflow-hidden"
                       >
                         Login Now
+                        <Ripple />
                       </button>
                     </>
                   )}
@@ -742,9 +899,8 @@ export default function App() {
               )}
 
               {loading && posts.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-[60vh] gap-4 text-gray-400">
-                  <Loader2 size={32} className="animate-spin" />
-                  <p className="text-sm font-medium uppercase tracking-wider">Syncing with Reddit...</p>
+                <div className="flex flex-col items-center justify-center h-[60vh] gap-4 text-text-secondary">
+                  <SquigglyLoader size={32} className="text-primary" />
                 </div>
               ) : (
                 <>
@@ -752,16 +908,20 @@ export default function App() {
                     <PostCard 
                       key={`${post.id}-${idx}`} 
                       post={post} 
-                      onClick={setSelectedPost} 
+                      onClick={(post) => {
+                        scrollPositionRef.current = feedContainerRef.current?.scrollTop || 0;
+                        setSelectedPost(post);
+                      }} 
                       onVote={handleVote}
                       onSubredditClick={(sr) => {
                         handleSubredditChange(sr);
                       }}
                       onUserClick={(user) => {
+                        scrollPositionRef.current = feedContainerRef.current?.scrollTop || 0;
                         setSelectedUser(user);
                         setView('profile');
                       }}
-                      onMediaClick={setFullViewMediaPost}
+                      onMediaClick={handleMediaClick}
                       onFilterSubreddit={handleFilterSubreddit}
                       onFilterUser={handleFilterUser}
                     />
@@ -769,38 +929,72 @@ export default function App() {
                   
                   {/* Infinite Scroll Target */}
                   <div ref={observerTarget} className="h-20 flex items-center justify-center">
-                    {loading && <Loader2 size={24} className="animate-spin text-text-secondary" />}
+                    {loading && <SquigglyLoader size={24} className="text-text-secondary" />}
                   </div>
                 </>
               )}
             </div>
-          </main>
-        )}
+          </div>
+        </motion.main>
+      )}
 
         {/* Settings View */}
-        {view === 'settings' && (
-          <main className="flex-1 flex flex-col w-full min-w-0 bg-bg-primary">
-            <header className="sticky top-0 z-40 bg-bg-primary/90 backdrop-blur-md px-4 py-3 md:px-8 md:py-4 flex items-center gap-4">
-              <button onClick={() => setView('feed')} className="p-1 text-text-secondary hover:text-text-primary">
-                <ArrowLeft size={22} />
+        {view === 'settings' && !selectedPost && (
+          <motion.main 
+            key="settings"
+            initial={{ opacity: 0, x: 30 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 30 }}
+            transition={{ 
+              duration: 0.5, 
+              ease: [0.2, 0, 0, 1], // M3 Emphasized
+              opacity: { duration: 0.3, ease: "linear" }
+            }}
+            className="absolute inset-0 flex flex-col w-full h-full bg-bg-primary overflow-y-auto"
+            ref={(node) => {
+              if (node) {
+                const handleScroll = () => {
+                  const currentScrollY = node.scrollTop;
+                  if (currentScrollY > lastScrollY.current && currentScrollY > 100) {
+                    setShowHeader(false);
+                  } else {
+                    setShowHeader(true);
+                  }
+                  lastScrollY.current = currentScrollY;
+                };
+                node.addEventListener('scroll', handleScroll);
+                return () => node.removeEventListener('scroll', handleScroll);
+              }
+            }}
+          >
+            <motion.header 
+              initial={false}
+              animate={{ y: showHeader ? 0 : -64 }}
+              transition={{ duration: 0.3, ease: [0.2, 0, 0, 1] }}
+              className="sticky top-0 z-40 bg-bg-primary/90 backdrop-blur-md px-4 h-16 md:px-8 flex items-center gap-4 shrink-0"
+            >
+              <button onClick={closeView} className="relative p-2 -ml-2 text-text-secondary hover:text-text-primary hover:bg-hover-bg rounded-full transition-all active:scale-90 overflow-hidden">
+                <ArrowLeft size={24} />
+                <Ripple />
               </button>
-              <h1 className="text-xl font-semibold text-text-primary">Settings</h1>
-            </header>
-            <div className="p-4 md:p-8 max-w-2xl mx-auto w-full flex flex-col gap-8">
+              <h1 className="text-2xl font-display font-medium text-text-primary">Settings</h1>
+            </motion.header>
+            <div className="-mt-16 pt-16">
+              <div className="p-4 md:p-8 max-w-2xl mx-auto w-full flex flex-col gap-8">
               {/* Appearance Section */}
               <div className="flex flex-col gap-4">
-                <div className="flex items-center gap-2 text-text-primary">
-                  <Moon size={18} />
-                  <h3 className="font-medium">Appearance</h3>
+                <div className="flex items-center gap-3 text-text-primary px-2">
+                  <Moon size={20} className="text-primary" />
+                  <h3 className="font-display font-bold text-lg">Appearance</h3>
                 </div>
-                <div className="flex flex-col gap-3 p-4 bg-bg-secondary rounded-lg">
+                <div className="flex flex-col gap-3 p-5 bg-bg-secondary rounded-3xl">
                   <div className="flex items-center justify-between">
                     <div>
-                      <label className="text-sm font-medium text-text-primary">Theme</label>
-                      <p className="text-xs text-text-secondary mt-0.5">Choose your preferred theme</p>
+                      <label className="text-base font-bold text-text-primary">Theme</label>
+                      <p className="text-sm text-text-secondary mt-0.5">Choose your preferred theme</p>
                     </div>
                     <select 
-                      className="bg-bg-primary border border-border-color rounded-lg px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-[#FF4500]"
+                      className="bg-bg-primary rounded-xl px-4 py-2.5 text-sm font-medium text-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
                       value={theme}
                       onChange={(e) => setTheme(e.target.value as 'system' | 'light' | 'dark')}
                     >
@@ -814,13 +1008,13 @@ export default function App() {
 
               {/* API Configuration Section */}
               <div className="flex flex-col gap-4">
-                <div className="flex items-center gap-2 text-text-primary">
-                  <Hash size={18} />
-                  <h3 className="font-medium">API Configuration</h3>
+                <div className="flex items-center gap-3 text-text-primary px-2">
+                  <Hash size={20} className="text-primary" />
+                  <h3 className="font-display font-bold text-lg">API Configuration</h3>
                 </div>
-                <div className="flex flex-col gap-3 p-4 bg-bg-secondary rounded-lg">
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-medium text-text-secondary uppercase tracking-wider">Reddit Client ID</label>
+                <div className="flex flex-col gap-3 p-5 bg-bg-secondary rounded-3xl">
+                  <div className="flex flex-col gap-2">
+                    <label className="text-sm font-bold text-text-secondary uppercase tracking-wider">Reddit Client ID</label>
                     <input 
                       type="text" 
                       value={redditClientId}
@@ -829,12 +1023,12 @@ export default function App() {
                         localStorage.setItem('reddit_client_id', e.target.value);
                       }}
                       placeholder="Enter Reddit Client ID"
-                      className="bg-bg-primary rounded-md px-3 py-2 text-sm text-text-primary outline-none focus:ring-1 focus:ring-[#FF4500]"
+                      className="bg-bg-primary rounded-xl px-4 py-3 text-base text-text-primary outline-none focus:ring-2 focus:ring-primary transition-all"
                     />
-                    <p className="text-[11px] text-text-secondary mt-1">
-                      Create an app at <a href="https://www.reddit.com/prefs/apps" target="_blank" rel="noreferrer" className="text-[#FF4500] hover:underline">reddit.com/prefs/apps</a> (Type: installed app).<br/>
+                    <p className="text-xs text-text-secondary mt-1 leading-relaxed">
+                      Create an app at <a href="https://www.reddit.com/prefs/apps" target="_blank" rel="noreferrer" className="text-primary font-bold hover:underline">reddit.com/prefs/apps</a> (Type: installed app).<br/>
                       Set redirect uri to: <br/>
-                      <code className="bg-bg-primary px-1.5 py-0.5 rounded mt-1 inline-block select-all">{window.location.origin}/auth/callback</code>
+                      <code className="bg-bg-primary px-2 py-1 rounded-md mt-1.5 inline-block select-all font-mono text-xs">{window.location.origin}/auth/callback</code>
                     </p>
                   </div>
                 </div>
@@ -842,57 +1036,61 @@ export default function App() {
 
               {/* Reddit Account Section */}
               <div className="flex flex-col gap-4">
-                <div className="flex items-center gap-2 text-text-primary">
-                  <UserCircle size={18} />
-                  <h3 className="font-medium">Reddit Accounts</h3>
+                <div className="flex items-center gap-3 text-text-primary px-2">
+                  <UserCircle size={20} className="text-primary" />
+                  <h3 className="font-display font-bold text-lg">Reddit Accounts</h3>
                 </div>
-                <div className="flex flex-col gap-3 p-4 bg-bg-secondary rounded-lg">
+                <div className="flex flex-col gap-3 p-5 bg-bg-secondary rounded-3xl">
                   {accounts.length > 0 ? (
                     <div className="flex flex-col gap-3">
                       {accounts.map(acc => (
-                        <div key={acc.username} className="flex items-center justify-between p-2 bg-bg-primary rounded-lg">
-                          <div className="flex items-center gap-2">
-                            <div className={`w-2 h-2 rounded-full ${acc.username === currentUsername ? 'bg-green-500' : 'bg-[#343536]'}`} />
+                        <div key={acc.username} className="flex items-center justify-between p-3 bg-bg-primary rounded-2xl">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-2.5 h-2.5 rounded-full ${acc.username === currentUsername ? 'bg-green-500' : 'bg-bg-tertiary'}`} />
                             <div className="flex flex-col">
-                              <span className="text-sm font-medium text-text-primary">u/{acc.username}</span>
+                              <span className="text-base font-bold text-text-primary">u/{acc.username}</span>
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
                             {acc.username !== currentUsername && (
                               <button 
                                 onClick={() => handleSwitchAccount(acc.username)}
-                                className="text-xs text-[#FF4500] hover:underline font-medium"
+                                className="relative text-sm text-primary hover:bg-primary/10 px-3 py-1.5 rounded-full font-bold transition-colors overflow-hidden"
                               >
                                 Switch
+                                <Ripple />
                               </button>
                             )}
                             <button 
                               onClick={() => handleRemoveAccount(acc.username)}
-                              className="p-1 text-text-secondary hover:text-red-500 transition-colors"
+                              className="relative p-2 text-text-secondary hover:text-red-500 hover:bg-red-500/10 rounded-full transition-colors overflow-hidden"
                             >
-                              <Trash2 size={14} />
+                              <Trash2 size={18} />
+                              <Ripple />
                             </button>
                           </div>
                         </div>
                       ))}
                       <button 
                         onClick={handleRedditLogin}
-                        className="flex items-center justify-center gap-2 w-full py-2 bg-[#D7DADC] text-[#030303] hover:bg-[#D7DADC]/90 rounded-md text-sm font-medium mt-2 transition-colors"
+                        className="relative flex items-center justify-center gap-2 w-full py-3 bg-primary text-on-primary hover:opacity-90 rounded-full text-sm font-bold mt-2 transition-all active:scale-95 overflow-hidden"
                       >
-                        <LogIn size={16} /> Add Another Account
+                        <LogIn size={18} /> Add Another Account
+                        <Ripple />
                       </button>
                     </div>
                   ) : (
-                    <div className="flex flex-col gap-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-text-primary font-medium">Status</span>
-                        <span className="text-xs px-2 py-0.5 bg-[#343536] text-text-secondary rounded-full font-bold">Disconnected</span>
+                    <div className="flex flex-col gap-4">
+                      <div className="flex items-center justify-between px-1">
+                        <span className="text-base text-text-primary font-bold">Status</span>
+                        <span className="text-xs px-3 py-1 bg-bg-tertiary text-text-secondary rounded-full font-bold uppercase tracking-wider">Disconnected</span>
                       </div>
                       <button 
                         onClick={handleRedditLogin}
-                        className="flex items-center justify-center gap-2 w-full py-2 bg-[#D7DADC] text-[#030303] hover:bg-[#D7DADC]/90 rounded-md text-sm font-medium transition-colors"
+                        className="relative flex items-center justify-center gap-2 w-full py-3 bg-primary text-on-primary hover:opacity-90 rounded-full text-sm font-bold transition-all active:scale-95 overflow-hidden"
                       >
-                        <LogIn size={16} /> Login with Reddit
+                        <LogIn size={18} /> Login with Reddit
+                        <Ripple />
                       </button>
                     </div>
                   )}
@@ -901,15 +1099,15 @@ export default function App() {
 
               {/* App Section */}
               <div className="flex flex-col gap-4">
-                <div className="flex items-center gap-2 text-text-primary">
-                  <Smartphone size={18} />
-                  <h3 className="font-medium">App</h3>
+                <div className="flex items-center gap-3 text-text-primary px-2">
+                  <Smartphone size={20} className="text-primary" />
+                  <h3 className="font-display font-bold text-lg">App</h3>
                 </div>
-                <div className="flex flex-col gap-3 p-4 bg-bg-secondary rounded-lg">
+                <div className="flex flex-col gap-3 p-5 bg-bg-secondary rounded-3xl">
                   <div className="flex items-center justify-between">
-                    <div className="flex flex-col gap-0.5">
-                      <span className="text-sm text-text-primary font-medium">Install Minute</span>
-                      <span className="text-xs text-text-secondary">
+                    <div className="flex flex-col gap-1">
+                      <span className="text-base text-text-primary font-bold">Install Minute</span>
+                      <span className="text-xs text-text-secondary max-w-[200px] leading-relaxed">
                         {isIframe 
                           ? 'Open in a new tab to install as a PWA'
                           : isStandalone 
@@ -922,43 +1120,106 @@ export default function App() {
                     <button 
                       disabled={!isInstallable || isStandalone || isIframe}
                       onClick={handleInstallClick}
-                      className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${isInstallable && !isStandalone && !isIframe ? 'bg-[#FF4500] text-white hover:bg-[#FF4500]/90' : 'bg-[#343536] text-text-secondary cursor-not-allowed'}`}
+                      className={`relative px-5 py-2.5 rounded-full text-sm font-bold transition-all active:scale-95 overflow-hidden ${isInstallable && !isStandalone && !isIframe ? 'bg-primary text-on-primary hover:opacity-90' : 'bg-bg-tertiary text-text-secondary cursor-not-allowed'}`}
                     >
                       {isStandalone ? 'Installed' : isInstallable ? 'Install' : isIframe ? 'Unavailable' : 'Checking...'}
+                      <Ripple />
                     </button>
                   </div>
-                  <div className="flex items-center justify-between pt-2 border-t border-border-color">
-                    <span className="text-sm text-text-primary font-medium">Version</span>
-                    <span className="text-xs text-text-secondary">1.0.0</span>
+                  <div className="flex items-center justify-between pt-4 mt-2">
+                    <span className="text-sm text-text-primary font-bold">Version</span>
+                    <span className="text-sm font-mono text-text-secondary bg-bg-primary px-2 py-1 rounded-md">1.0.0</span>
                   </div>
                 </div>
               </div>
             </div>
-          </main>
-        )}
+          </div>
+        </motion.main>
+      )}
 
         {/* Profile View */}
-        {view === 'profile' && selectedUser && (
-          <main className="flex-1 flex flex-col w-full min-w-0">
+        {view === 'profile' && selectedUser && !selectedPost && (
+          <motion.main 
+            key="profile"
+            initial={{ opacity: 0, x: 30 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 30 }}
+            transition={{ 
+              duration: 0.5, 
+              ease: [0.2, 0, 0, 1], // M3 Emphasized
+              opacity: { duration: 0.3, ease: "linear" }
+            }}
+            className="absolute inset-0 flex flex-col w-full h-full overflow-y-auto"
+          >
             <UserProfile 
               username={selectedUser} 
-              onClose={() => setView('feed')} 
+              onClose={closeView} 
               onPostClick={setSelectedPost}
               onVote={handleVote}
               onSubredditClick={handleSubredditChange}
-              onMediaClick={setFullViewMediaPost}
+              onMediaClick={handleMediaClick}
             />
-          </main>
+          </motion.main>
         )}
+
+        {/* Post Detail View */}
+        {selectedPost && (
+          <motion.main 
+            key="post-detail"
+            initial={{ opacity: 0, x: 30 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 30 }}
+            transition={{ 
+              duration: 0.5, 
+              ease: [0.2, 0, 0, 1], // M3 Emphasized
+              opacity: { duration: 0.3, ease: "linear" }
+            }}
+            className="absolute inset-0 flex flex-col w-full h-full bg-bg-primary overflow-hidden"
+          >
+            <PostDetail 
+              post={selectedPost} 
+              onClose={closePostDetail} 
+              onVote={handleVote}
+              onComment={handleComment}
+              onSubredditClick={(sr) => {
+                handleSubredditChange(sr);
+                closePostDetail();
+              }}
+              onUserClick={(user) => {
+                setSelectedUser(user);
+                setView('profile');
+                closePostDetail();
+              }}
+              onFilterSubreddit={handleFilterSubreddit}
+              onFilterUser={handleFilterUser}
+              onMediaClick={handleMediaClick}
+            />
+          </motion.main>
+        )}
+      </AnimatePresence>
+      </div>
       </div>
 
       {/* Mobile Navigation Bar */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-bg-primary/95 dark:!bg-black backdrop-blur-md px-4 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] flex items-center justify-around z-50 shadow-[0_-1px_3px_rgba(0,0,0,0.2)] transform translate-z-0">
-        <MobileNavItem icon={<Home size={20} />} label="Home" active={subreddit === 'home' && view === 'feed'} onClick={() => handleSubredditChange('home')} />
-        <MobileNavItem icon={<TrendingUp size={20} />} label="Popular" active={subreddit === 'popular' && view === 'feed'} onClick={() => handleSubredditChange('popular')} />
-        <MobileNavItem icon={<Globe size={20} />} label="Browse" active={showSubreddits} onClick={() => setShowSubreddits(true)} />
-        <MobileNavItem icon={<Settings size={20} />} label="Settings" active={view === 'settings'} onClick={() => setView('settings')} />
-      </nav>
+      <AnimatePresence>
+        {!selectedPost && !fullViewMediaPost && view !== 'profile' && (
+          <motion.nav 
+            initial={{ y: 100 }}
+            animate={{ y: 0 }}
+            exit={{ y: 100 }}
+            transition={{ duration: 0.3, ease: [0.2, 0, 0, 1] }}
+            className="md:hidden fixed bottom-0 left-0 right-0 bg-bg-primary/95 backdrop-blur-md px-4 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] flex items-center justify-around z-50 transform translate-z-0"
+          >
+            <MobileNavItem icon={<Home size={20} />} label="Home" active={subreddit === 'home' && view === 'feed'} onClick={() => handleSubredditChange('home')} />
+            <MobileNavItem icon={<TrendingUp size={20} />} label="Popular" active={subreddit === 'popular' && view === 'feed'} onClick={() => handleSubredditChange('popular')} />
+            <MobileNavItem icon={<Globe size={20} />} label="Browse" active={showSubreddits} onClick={() => setShowSubreddits(true)} />
+            <MobileNavItem icon={<Settings size={20} />} label="Settings" active={view === 'settings'} onClick={() => {
+              if (view === 'feed') scrollPositionRef.current = feedContainerRef.current?.scrollTop || 0;
+              setView('settings');
+            }} />
+          </motion.nav>
+        )}
+      </AnimatePresence>
 
       {/* Mobile Subreddits Drawer */}
       <AnimatePresence>
@@ -968,20 +1229,26 @@ export default function App() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setShowSubreddits(false)}
-              className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm z-[80]"
+              transition={{ duration: 0.2, ease: "linear" }}
+              onClick={closeSubreddits}
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[80]"
             />
             <motion.div 
-              initial={{ y: '100%' }}
-              animate={{ y: 0 }}
-              exit={{ y: '100%' }}
-              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="fixed bottom-0 left-0 right-0 max-h-[70vh] bg-bg-secondary rounded-t-2xl z-[90] overflow-hidden flex flex-col shadow-2xl"
+              initial={{ opacity: 0, y: 40 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 40 }}
+              transition={{ 
+                duration: 0.5,
+                ease: [0.2, 0, 0, 1], // M3 Emphasized easing
+                opacity: { duration: 0.3, ease: "linear" }
+              }}
+              className="fixed bottom-0 left-0 right-0 max-h-[70vh] bg-bg-secondary rounded-t-3xl z-[90] overflow-hidden flex flex-col"
             >
-              <header className="p-4 flex items-center justify-between sticky top-0 bg-bg-secondary z-10">
-                <h2 className="font-semibold text-text-primary">Subreddits</h2>
-                <button onClick={() => setShowSubreddits(false)} className="p-1 text-text-secondary">
-                  <X size={20} />
+              <header className="p-5 flex items-center justify-between sticky top-0 bg-bg-secondary z-10">
+                <h2 className="font-display font-bold text-xl text-text-primary">Subreddits</h2>
+                <button onClick={closeSubreddits} className="relative p-2 text-text-secondary hover:text-text-primary hover:bg-hover-bg rounded-full transition-all active:scale-90 overflow-hidden">
+                  <X size={24} />
+                  <Ripple />
                 </button>
               </header>
               <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-1 pb-24">
@@ -989,12 +1256,13 @@ export default function App() {
                   <button
                     key={sub}
                     onClick={() => handleSubredditChange(sub)}
-                    className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors ${
-                      subreddit === sub ? 'bg-bg-tertiary text-text-primary' : 'text-text-secondary active:bg-bg-tertiary'
+                    className={`relative flex items-center gap-4 px-5 py-3.5 rounded-full text-base font-medium transition-colors overflow-hidden ${
+                      subreddit === sub ? 'bg-secondary-container text-on-secondary-container font-bold' : 'text-text-secondary hover:bg-hover-bg hover:text-text-primary active:bg-bg-tertiary'
                     }`}
                   >
-                    <Hash size={18} className="text-text-secondary" />
+                    <Hash size={20} className={subreddit === sub ? 'text-on-secondary-container' : 'text-text-secondary'} />
                     <span className="capitalize">{sub}</span>
+                    <Ripple />
                   </button>
                 ))}
               </div>
@@ -1006,48 +1274,6 @@ export default function App() {
       {/* Settings Modal - Removed as it's now a view */}
 
       {/* Post Detail Drawer */}
-      <AnimatePresence>
-        {selectedPost && (
-          <>
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setSelectedPost(null)}
-              className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm z-[60]"
-            />
-            <motion.div 
-              initial={{ x: '100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: '100%' }}
-              transition={{ type: 'tween', ease: 'easeOut', duration: 0.25 }}
-              className="fixed inset-y-0 right-0 w-full md:w-[640px] z-[70] bg-bg-primary shadow-2xl overflow-hidden"
-            >
-              <PostDetail 
-                post={selectedPost} 
-                onClose={() => setSelectedPost(null)} 
-                onVote={handleVote}
-                onComment={handleComment}
-                onSubredditClick={(sr) => {
-                  handleSubredditChange(sr);
-                  setSelectedPost(null);
-                }}
-                onUserClick={(user) => {
-                  setSelectedUser(user);
-                  setView('profile');
-                  setSelectedPost(null);
-                }}
-                onFilterSubreddit={handleFilterSubreddit}
-                onFilterUser={handleFilterUser}
-                onMediaClick={(post, index) => {
-                  setFullViewMediaPost(post);
-                  if (index !== undefined) setGalleryIndex(index);
-                }}
-              />
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
       {/* Persistent Media View Modal */}
       <AnimatePresence>
         {fullViewMediaPost && (
@@ -1055,15 +1281,15 @@ export default function App() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 backdrop-blur-sm"
-            onClick={() => setFullViewMediaPost(null)}
+            transition={{ duration: 0.2, ease: "linear" }}
+            className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 backdrop-blur-md"
+            onClick={closeMediaView}
           >
             <motion.div 
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              transition={{ duration: 0.2 }}
+              transition={{ type: "spring", stiffness: 300, damping: 30 }}
               className="relative w-full h-full flex items-center justify-center cursor-grab active:cursor-grabbing"
               onClick={(e) => e.stopPropagation()}
             >
@@ -1072,17 +1298,19 @@ export default function App() {
                   href={fullViewMediaPost.url} 
                   target="_blank" 
                   rel="noopener noreferrer"
-                  className="p-2 bg-black/40 hover:bg-black/60 text-white rounded-full transition-all flex items-center gap-2 px-4 text-sm font-medium"
+                  className="relative p-3 bg-white/10 hover:bg-white/20 text-white rounded-full transition-all flex items-center gap-2 px-5 text-sm font-bold backdrop-blur-md active:scale-95 overflow-hidden"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <Globe size={18} />
+                  <Globe size={20} />
                   Open Link
+                  <Ripple />
                 </a>
                 <button 
-                  onClick={() => setFullViewMediaPost(null)}
-                  className="p-2 bg-black/40 hover:bg-black/60 text-white rounded-full transition-all"
+                  onClick={closeMediaView}
+                  className="relative p-3 bg-white/10 hover:bg-white/20 text-white rounded-full transition-all backdrop-blur-md active:scale-90 overflow-hidden"
                 >
                   <X size={24} />
+                  <Ripple />
                 </button>
               </div>
 
@@ -1159,30 +1387,7 @@ export default function App() {
                       />
                     );
                   }
-                  return (
-                    <div className="w-full h-full bg-bg-secondary rounded-2xl overflow-hidden flex flex-col">
-                      <iframe 
-                        src={fullViewMediaPost.url} 
-                        className="w-full h-full border-none"
-                        title="Website Preview"
-                        sandbox="allow-scripts allow-same-origin allow-popups"
-                      />
-                      <div className="p-4 bg-bg-primary border-t border-border-color flex items-center justify-between">
-                        <div className="flex flex-col">
-                          <span className="text-xs text-text-secondary uppercase font-bold tracking-wider">Previewing</span>
-                          <span className="text-sm text-text-primary truncate max-w-[200px] md:max-w-md">{fullViewMediaPost.url}</span>
-                        </div>
-                        <a 
-                          href={fullViewMediaPost.url} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="px-4 py-2 bg-[#FF4500] text-white rounded-lg text-sm font-bold"
-                        >
-                          Open in Browser
-                        </a>
-                      </div>
-                    </div>
-                  );
+                  return null;
                 })()
                 }
               </div>
@@ -1213,32 +1418,34 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
     if (this.state.hasError) {
       return (
         <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center bg-bg-primary text-text-primary">
-          <div className="w-16 h-16 bg-red-100/10 text-red-500 rounded-full flex items-center justify-center mb-4">
+          <div className="w-16 h-16 bg-error/10 text-error rounded-full flex items-center justify-center mb-4">
             <X size={32} />
           </div>
-          <h1 className="text-xl font-bold text-text-primary mb-2">Something went wrong</h1>
+          <h1 className="text-2xl font-display font-bold text-text-primary mb-2">Something went wrong</h1>
           <p className="text-text-secondary mb-6 max-w-md">
             The application encountered an unexpected error. This might be due to corrupted local data.
           </p>
           <div className="flex flex-col gap-3 w-full max-w-xs">
             <button 
               onClick={() => window.location.reload()}
-              className="w-full py-2 bg-[#D7DADC] text-[#030303] rounded-md font-medium hover:bg-[#D7DADC]/90 transition-colors"
+              className="relative w-full py-3 bg-primary text-on-primary rounded-full font-bold hover:opacity-90 transition-all active:scale-95 overflow-hidden"
             >
               Reload Application
+              <Ripple />
             </button>
             <button 
               onClick={() => {
                 localStorage.clear();
                 window.location.reload();
               }}
-              className="w-full py-2 bg-bg-secondary text-red-500 rounded-md font-medium hover:bg-red-500/10 transition-colors"
+              className="relative w-full py-3 bg-error/10 text-error rounded-full font-bold hover:bg-error/20 transition-all active:scale-95 overflow-hidden"
             >
               Clear Data & Reset
+              <Ripple />
             </button>
           </div>
           {process.env.NODE_ENV !== 'production' && (
-            <pre className="mt-8 p-4 bg-bg-secondary rounded text-left text-xs overflow-auto max-w-full text-text-secondary">
+            <pre className="mt-8 p-4 bg-bg-secondary rounded-2xl text-left text-xs overflow-auto max-w-full text-text-secondary">
               {this.state.error?.toString()}
             </pre>
           )}
@@ -1254,12 +1461,13 @@ function MobileNavItem({ icon, label, active, onClick }: { icon: React.ReactNode
   return (
     <button 
       onClick={onClick}
-      className="flex flex-col items-center gap-1 min-w-[64px] active:scale-95 transition-transform cursor-pointer touch-manipulation"
+      className="flex flex-col items-center gap-1 min-w-[64px] active:scale-95 transition-transform cursor-pointer touch-manipulation group"
     >
-      <div className={`p-1.5 rounded-md transition-all duration-200 ${active ? 'bg-bg-tertiary text-text-primary' : 'text-text-secondary'}`}>
+      <div className={`relative px-5 py-1 rounded-full transition-all duration-300 overflow-hidden ${active ? 'bg-secondary-container text-on-secondary-container' : 'text-text-secondary group-hover:bg-hover-bg'}`}>
         {icon}
+        <Ripple />
       </div>
-      <span className={`text-[10px] font-medium transition-colors ${active ? 'text-text-primary' : 'text-text-secondary'}`}>
+      <span className={`text-[11px] font-medium transition-colors ${active ? 'text-text-primary font-bold' : 'text-text-secondary'}`}>
         {label}
       </span>
     </button>

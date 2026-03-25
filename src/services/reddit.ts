@@ -69,6 +69,7 @@ export interface RedditComment {
   body: string;
   score: number;
   created_utc: number;
+  permalink: string;
   author_flair_text?: string;
   author_flair_richtext?: Array<{ e: 'text'; t?: string } | { e: 'emoji'; u: string; a: string }>;
   author_fullname?: string;
@@ -326,18 +327,58 @@ export async function fetchSubreddit(subreddit: string = 'all', after?: string):
   };
 }
 
+type CacheEntry = {
+  data?: { post: RedditPost, comments: RedditComment[] };
+  promise?: Promise<{ post: RedditPost, comments: RedditComment[] }>;
+  timestamp: number;
+};
+const postDetailsCache = new Map<string, CacheEntry>();
+const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
+
 export async function fetchPostDetails(permalink: string): Promise<{ post: RedditPost, comments: RedditComment[] }> {
+  const now = Date.now();
+  const cached = postDetailsCache.get(permalink);
+  
+  if (cached && now - cached.timestamp < CACHE_TTL) {
+    if (cached.data) return cached.data;
+    if (cached.promise) return cached.promise;
+  }
+
   const baseUrl = accessToken ? 'https://oauth.reddit.com' : 'https://www.reddit.com';
   const url = `${baseUrl}${permalink}.json`;
   
-  const response = await redditFetch(url);
-  if (!response.ok) throw new Error('Failed to fetch post details');
-  const data = await response.json();
+  const fetchPromise = (async () => {
+    try {
+      const response = await redditFetch(url);
+      if (!response.ok) throw new Error('Failed to fetch post details');
+      const data = await response.json();
+      
+      const result = {
+        post: data[0].data.children[0].data,
+        comments: data[1].data.children.map((child: any) => child.data)
+      };
+
+      postDetailsCache.set(permalink, { data: result, timestamp: Date.now() });
+      return result;
+    } catch (error) {
+      postDetailsCache.delete(permalink);
+      throw error;
+    }
+  })();
+
+  postDetailsCache.set(permalink, { promise: fetchPromise, timestamp: now });
   
-  return {
-    post: data[0].data.children[0].data,
-    comments: data[1].data.children.map((child: any) => child.data)
-  };
+  return fetchPromise;
+}
+
+export async function preloadPostDetails(permalink: string) {
+  const now = Date.now();
+  const cached = postDetailsCache.get(permalink);
+  if (cached && now - cached.timestamp < CACHE_TTL) {
+    return;
+  }
+  // Return the promise so we can await it, catch errors silently
+  return fetchPostDetails(permalink).catch(() => {});
 }
 
 export async function searchSubreddits(query: string): Promise<string[]> {

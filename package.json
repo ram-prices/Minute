@@ -9,7 +9,9 @@
     "deploy": "npm run build && npx gh-pages -d dist",
     "preview": "vite preview",
     "clean": "rm -rf dist",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "cap:sync": "npm run build && npx cap sync",
+    "cap:open": "npx cap open android"
   },
   "dependencies": {
     "@capacitor/android": "^8.2.0",
@@ -22,6 +24,9 @@
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
     "hls.js": "^1.6.15",
+    "html-entities": "^2.6.0",
+    "html-to-image": "^1.11.13",
+    "html2canvas": "^1.4.1",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
     "react": "^19.0.0",

@@ -5,6 +5,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { Twitter, ExternalLink, MessageCircle } from 'lucide-react';
+import { Ripple } from './Ripple';
 
 interface SocialEmbedProps {
   url: string;
@@ -56,15 +57,15 @@ export default function SocialEmbed({ url, type }: SocialEmbedProps) {
 
   if (loading) {
     return (
-      <div className="w-full p-6 bg-[#1A1A1B] rounded-xl animate-pulse flex flex-col gap-4">
+      <div className="w-full p-6 bg-bg-tertiary rounded-2xl animate-pulse flex flex-col gap-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-white/5" />
+          <div className="w-10 h-10 rounded-full bg-bg-secondary" />
           <div className="flex flex-col gap-2">
-            <div className="w-24 h-3 bg-white/5 rounded" />
-            <div className="w-16 h-2 bg-white/5 rounded" />
+            <div className="w-24 h-3 bg-bg-secondary rounded" />
+            <div className="w-16 h-2 bg-bg-secondary rounded" />
           </div>
         </div>
-        <div className="w-full h-20 bg-white/5 rounded" />
+        <div className="w-full h-20 bg-bg-secondary rounded" />
       </div>
     );
   }
@@ -75,56 +76,57 @@ export default function SocialEmbed({ url, type }: SocialEmbedProps) {
         href={url} 
         target="_blank" 
         rel="noopener noreferrer"
-        className="block w-full p-4 bg-[#1A1A1B] rounded-xl border border-white/10 hover:bg-white/5 transition-colors"
+        className="relative block w-full p-4 bg-bg-tertiary rounded-2xl hover:bg-hover-bg transition-colors overflow-hidden"
       >
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-[#818384]">
+          <div className="flex items-center gap-2 text-text-secondary">
             {type === 'twitter' ? <Twitter size={16} /> : <MessageCircle size={16} />}
             <span className="text-xs font-bold uppercase tracking-widest">{type}</span>
           </div>
-          <ExternalLink size={14} className="text-[#818384]" />
+          <ExternalLink size={14} className="text-text-secondary" />
         </div>
-        <p className="mt-2 text-sm text-[#D7DADC] truncate">{url}</p>
+        <p className="mt-2 text-sm text-text-primary truncate">{url}</p>
+        <Ripple />
       </a>
     );
   }
 
   if (type === 'twitter') {
     return (
-      <div className="w-full p-4 bg-[#1A1A1B] rounded-xl border border-white/10 flex flex-col gap-3 shadow-lg">
+      <div className="w-full p-5 bg-bg-tertiary rounded-2xl flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <img 
               src={data.author.avatar_url} 
               alt="" 
-              className="w-10 h-10 rounded-full border border-white/5"
+              className="w-10 h-10 rounded-full"
               referrerPolicy="no-referrer"
             />
             <div className="flex flex-col">
-              <span className="text-sm font-bold text-[#D7DADC]">{data.author.name}</span>
-              <span className="text-xs text-[#818384]">@{data.author.screen_name}</span>
+              <span className="text-sm font-bold text-text-primary">{data.author.name}</span>
+              <span className="text-xs text-text-secondary">@{data.author.screen_name}</span>
             </div>
           </div>
           <Twitter size={18} className="text-[#1DA1F2]" />
         </div>
-        <p className="text-[15px] text-[#D7DADC] leading-relaxed whitespace-pre-wrap">
+        <p className="text-[15px] text-text-primary leading-relaxed whitespace-pre-wrap">
           {data.text}
         </p>
         {data.media?.photos?.length > 0 && (
-          <div className="grid grid-cols-1 gap-2 rounded-lg overflow-hidden mt-2">
+          <div className="grid grid-cols-1 gap-2 rounded-2xl overflow-hidden mt-2">
             {data.media.photos.map((photo: any, i: number) => (
               <img 
                 key={i}
                 src={photo.url} 
                 alt="" 
-                className="w-full h-auto object-cover max-h-[500px] rounded-lg border border-white/5"
+                className="w-full h-auto object-cover max-h-[500px] rounded-2xl"
                 referrerPolicy="no-referrer"
               />
             ))}
           </div>
         )}
         {data.media?.videos?.length > 0 && (
-          <div className="w-full aspect-video rounded-lg overflow-hidden mt-2 border border-white/5 bg-black">
+          <div className="w-full aspect-video rounded-2xl overflow-hidden mt-2 bg-black">
             <video 
               src={data.media.videos[0].url} 
               controls 
@@ -133,11 +135,12 @@ export default function SocialEmbed({ url, type }: SocialEmbedProps) {
             />
           </div>
         )}
-        <div className="flex items-center gap-4 text-[11px] text-[#818384] font-bold uppercase tracking-wider mt-1">
+        <div className="flex items-center gap-4 text-[11px] text-text-secondary font-bold uppercase tracking-wider mt-1">
           <span>{new Date(data.created_at).toLocaleDateString()}</span>
           <span>•</span>
-          <a href={url} target="_blank" rel="noopener noreferrer" className="hover:text-[#D7DADC] flex items-center gap-1">
+          <a href={url} target="_blank" rel="noopener noreferrer" className="relative hover:text-text-primary flex items-center gap-1 px-2 -mx-2 py-1 rounded-md overflow-hidden">
             View on X <ExternalLink size={10} />
+            <Ripple />
           </a>
         </div>
       </div>
@@ -146,26 +149,27 @@ export default function SocialEmbed({ url, type }: SocialEmbedProps) {
 
   // Bluesky
   return (
-    <div className="w-full p-4 bg-[#1A1A1B] rounded-xl border border-white/10 flex flex-col gap-3 shadow-lg">
+    <div className="w-full p-5 bg-bg-tertiary rounded-2xl flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 font-bold overflow-hidden">
+          <div className="w-10 h-10 rounded-full bg-secondary-container flex items-center justify-center text-on-secondary-container font-bold overflow-hidden">
             {data.author_name?.charAt(0) || 'B'}
           </div>
           <div className="flex flex-col">
-            <span className="text-sm font-bold text-[#D7DADC]">{data.author_name || 'Bluesky User'}</span>
-            <span className="text-xs text-[#818384]">Bluesky</span>
+            <span className="text-sm font-bold text-text-primary">{data.author_name || 'Bluesky User'}</span>
+            <span className="text-xs text-text-secondary">Bluesky</span>
           </div>
         </div>
-        <MessageCircle size={18} className="text-blue-400" />
+        <MessageCircle size={18} className="text-primary" />
       </div>
       <div 
-        className="text-[15px] text-[#D7DADC] leading-relaxed whitespace-pre-wrap social-embed-content" 
+        className="text-[15px] text-text-primary leading-relaxed whitespace-pre-wrap social-embed-content" 
         dangerouslySetInnerHTML={{ __html: data.html }} 
       />
-      <div className="flex items-center gap-4 text-[11px] text-[#818384] font-bold uppercase tracking-wider mt-1">
-        <a href={url} target="_blank" rel="noopener noreferrer" className="hover:text-[#D7DADC] flex items-center gap-1">
+      <div className="flex items-center gap-4 text-[11px] text-text-secondary font-bold uppercase tracking-wider mt-1">
+        <a href={url} target="_blank" rel="noopener noreferrer" className="relative hover:text-text-primary flex items-center gap-1 px-2 -mx-2 py-1 rounded-md overflow-hidden">
           View on Bluesky <ExternalLink size={10} />
+          <Ripple />
         </a>
       </div>
     </div>

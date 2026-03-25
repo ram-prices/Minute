@@ -5,13 +5,17 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { RedditPost, getStreamableId, getTwitterId, getBlueskyId } from '../services/reddit';
-import { MessageSquare, ArrowUp, ArrowDown, MoreVertical, Play, Maximize2, User, Trash2, Twitter, MessageCircle } from 'lucide-react';
+import { MessageSquare, ArrowUp, ArrowDown, MoreVertical, Play, Maximize2, User, Trash2, Twitter, MessageCircle, Link } from 'lucide-react';
+import { UserAvatar } from './UserAvatar';
 import { motion, AnimatePresence } from 'motion/react';
 import ReactPlayer from 'react-player';
 import VideoPlayer from './VideoPlayer';
 import Flair from './Flair';
 import SocialEmbed from './SocialEmbed';
 import RedditMarkdown from './RedditMarkdown';
+import { Ripple } from './Ripple';
+import { decodeHtml } from '../lib/decode';
+import { formatTimestamp } from '../lib/time';
 
 let isGlobalScrolling = false;
 let globalScrollTimer: NodeJS.Timeout | null = null;
@@ -28,9 +32,10 @@ if (typeof window !== 'undefined') {
 
 const RedditTitle = ({ title, metadata }: { title: string; metadata?: any }) => {
   if (!title) return null;
-  if (!metadata) return <>{title}</>;
+  const decodedTitle = decodeHtml(title);
+  if (!metadata) return <>{decodedTitle}</>;
 
-  const parts = title.split(/:([a-zA-Z0-9_|[\]-]+):/g);
+  const parts = decodedTitle.split(/:([a-zA-Z0-9_|[\]-]+):/g);
   return (
     <>
       {parts.map((part, i) => {
@@ -91,7 +96,6 @@ export default function PostCard({
   }, [isPeeking]);
   const [hasPeeked, setHasPeeked] = useState(false);
   const peekTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const [peekPos, setPeekPos] = useState({ x: 0, y: 0 });
   const [authorIcon, setAuthorIcon] = useState<string | null>(null);
   const [showMenu, setShowMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -116,16 +120,6 @@ export default function PostCard({
       setLocalScore(prev => prev - voteDir + newDir);
       setVoteDir(newDir);
     }
-  };
-
-  const timeAgo = (utc: number) => {
-    const seconds = Math.floor((Date.now() / 1000) - utc);
-    if (seconds < 60) return `${seconds}s`;
-    const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) return `${minutes}m`;
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours}h`;
-    return `${Math.floor(hours / 24)}h`;
   };
 
   const getThumbnail = () => {
@@ -163,6 +157,18 @@ export default function PostCard({
 
   const handleTouchStart = (e: React.TouchEvent | React.MouseEvent) => {
     if (isGlobalScrolling) return; // Prevent peeking if already scrolling
+    
+    // Check if it's a link post - if so, don't allow peeking
+    const isGallery = post.is_gallery && post.gallery_data?.items && post.media_metadata;
+    const isVideo = post.is_video && post.media?.reddit_video;
+    const isImage = post.post_hint === 'image' || post.url?.match(/\.(jpg|jpeg|png|gif)$/i);
+    const streamableId = getStreamableId(post.url);
+    const isSocial = getTwitterId(post.url) || getBlueskyId(post.url);
+    
+    if (!isGallery && !isVideo && !isImage && !streamableId && !isSocial) {
+      return;
+    }
+
     setHasPeeked(false);
     const touch = 'touches' in e ? e.touches[0] : e;
     touchStartRef.current = { x: touch.clientX, y: touch.clientY };
@@ -236,16 +242,17 @@ export default function PostCard({
   return (
     <div
       onClick={handleClick}
-      className="bg-bg-primary border-b border-border-color md:rounded-lg p-3 md:p-4 cursor-pointer transition-colors group relative hover:bg-bg-secondary/50"
+      className="bg-bg-secondary rounded-2xl p-3 md:p-4 cursor-pointer transition-all duration-300 group relative hover:bg-bg-tertiary overflow-hidden"
     >
+      <Ripple />
       {/* Header */}
-      <div className="flex items-center gap-2 mb-2">
+      <div className="flex items-center gap-2 mb-1 transition-opacity">
         <button 
           onClick={(e) => {
             e.stopPropagation();
             onSubredditClick?.(post.subreddit);
           }}
-          className="w-6 h-6 rounded-full bg-bg-secondary flex items-center justify-center text-[10px] font-bold text-white shrink-0 overflow-hidden no-callout"
+          className="relative w-6 h-6 rounded-full bg-bg-highest flex items-center justify-center text-[10px] font-bold text-text-secondary shrink-0 overflow-hidden no-callout transition-transform active:scale-95"
         >
           {post.sr_detail?.community_icon || post.sr_detail?.icon_img ? (
             <img 
@@ -259,44 +266,47 @@ export default function PostCard({
           ) : (
             post.subreddit.charAt(0).toUpperCase()
           )}
+          <Ripple />
         </button>
-        <div className="flex items-center gap-1.5 text-[12px] text-text-primary">
+        <div className="flex items-center flex-wrap gap-x-1.5 gap-y-0.5 text-xs text-text-secondary opacity-70 group-hover:opacity-100 transition-opacity">
           <button 
             onClick={(e) => {
               e.stopPropagation();
               onSubredditClick?.(post.subreddit);
             }}
-            className="font-bold hover:underline"
+            className="relative font-medium hover:underline px-1 -mx-1 rounded-md overflow-hidden"
           >
             r/{post.subreddit}
+            <Ripple />
           </button>
-          <span className="text-text-secondary flex items-center gap-1.5">
-            <button 
-              onClick={(e) => {
-                e.stopPropagation();
-                onUserClick?.(post.author);
-              }}
-              className="hover:underline flex items-center gap-1.5 max-w-[120px]"
-            >
-              <div className="w-4 h-4 rounded-full bg-bg-secondary flex items-center justify-center overflow-hidden shrink-0">
-                <User size={10} className="text-text-secondary" />
-              </div>
-              <span className="truncate">u/{post.author}</span>
-            </button>
+          <span className="opacity-50">•</span>
+          <button 
+            onClick={(e) => {
+              e.stopPropagation();
+              onUserClick?.(post.author);
+            }}
+            className="relative hover:underline opacity-75 flex items-center gap-1.5 px-1 -mx-1 rounded-md overflow-hidden"
+          >
+            <div className="w-4 h-4 rounded-full bg-bg-tertiary flex items-center justify-center overflow-hidden shrink-0">
+              <UserAvatar username={post.author} size={10} iconClassName="text-text-secondary" />
+            </div>
+            u/{post.author}
             <Flair 
               text={post.author_flair_text} 
               richtext={post.author_flair_richtext}
-              className={post.author.length >= 15 ? 'hidden' : ''}
+              className="origin-left"
             />
-            {' '}• {timeAgo(post.created_utc)}
-          </span>
+            <Ripple />
+          </button>
+          <span className="opacity-50">•</span>
+          <span className="opacity-75">{formatTimestamp(post.created_utc)}</span>
         </div>
       </div>
 
       {/* Title and Thumbnail Row */}
       <div className="flex gap-3 mb-2">
         <div className="flex-1 min-w-0">
-          <h2 className="text-[15px] font-medium text-text-primary leading-snug break-anywhere mb-1">
+          <h2 className="text-sm md:text-base font-display font-medium text-text-primary leading-tight break-anywhere mb-1 tracking-tight">
             <RedditTitle title={post.title} metadata={post.media_metadata} />
           </h2>
           {post.link_flair_text && (
@@ -314,7 +324,7 @@ export default function PostCard({
         {/* Thumbnail for Media Posts */}
         {thumbnail && (
           <div 
-            className="w-20 h-20 md:w-24 md:h-24 shrink-0 rounded-lg overflow-hidden bg-bg-secondary relative touch-pan-y select-none no-callout"
+            className="w-24 h-24 md:w-32 md:h-32 shrink-0 rounded-2xl overflow-hidden bg-bg-highest relative touch-pan-y select-none no-callout transition-transform"
             onMouseDown={handleTouchStart}
             onMouseUp={handleTouchEnd}
             onMouseLeave={handleTouchEnd}
@@ -367,39 +377,88 @@ export default function PostCard({
 
       {/* Text Preview for Text Posts */}
       {isTextPost && !thumbnail && (
-        <div className="bg-bg-secondary rounded-lg p-3 mb-3">
-          <div className="text-[13px] text-text-primary opacity-80 leading-relaxed line-clamp-5">
+        <div className="bg-bg-tertiary rounded-2xl p-3 mb-2">
+          <div className="text-[13px] text-text-primary opacity-80 leading-snug line-clamp-5">
             <RedditMarkdown content={post.selftext} />
           </div>
         </div>
       )}
 
       {/* Footer - Now below content */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between mt-1">
+        <div className="flex items-center gap-3">
           {/* Vote Pill */}
-          <div className="flex items-center bg-bg-secondary rounded-md p-0.5 h-[36px]">
-            <button 
+          <div className="flex items-center h-8">
+            <motion.button 
+              initial={false}
               onClick={(e) => handleVote(e, 1)}
-              className={`p-1.5 rounded-md transition-colors h-full flex items-center ${voteDir === 1 ? 'text-[#FF4500] bg-[#FF4500]/10' : 'text-text-secondary hover:bg-hover-bg'}`}
+              animate={{
+                width: 32,
+                borderRadius: voteDir === 1 ? "16px 0px 0px 16px" : 
+                             voteDir === -1 ? "16px 16px 16px 16px" : "16px 0px 0px 16px",
+                marginRight: voteDir === -1 ? 6 : 0,
+                backgroundColor: voteDir === 1 ? "var(--md-sys-color-primary)" : "var(--md-sys-color-surface-container-highest)",
+                color: voteDir === 1 ? "var(--md-sys-color-on-primary)" : "var(--md-sys-color-on-surface-variant)"
+              }}
+              whileHover={voteDir === 0 ? { backgroundColor: "var(--md-sys-color-surface-container-high)" } : {}}
+              transition={{ 
+                duration: 0.3
+              }}
+              className="relative flex items-center justify-center h-full z-10 overflow-hidden"
             >
-              <ArrowUp size={18} strokeWidth={2.5} />
-            </button>
-            <span className={`text-[13px] font-bold px-1 min-w-[24px] text-center ${voteDir === 1 ? 'text-[#FF4500]' : voteDir === -1 ? 'text-[#7193FF]' : 'text-text-primary'}`}>
+              <ArrowUp size={16} strokeWidth={2.5} />
+              <Ripple />
+            </motion.button>
+            <motion.div 
+              initial={false}
+              animate={{
+                borderRadius: voteDir === 1 ? "0px 16px 16px 0px" : 
+                             voteDir === -1 ? "16px 0px 0px 16px" : "0px 0px 0px 0px",
+                marginLeft: voteDir === 1 ? -1 : 0,
+                marginRight: voteDir === -1 ? -1 : 0,
+                paddingLeft: voteDir === 1 ? 4 : voteDir === -1 ? 12 : 6,
+                paddingRight: voteDir === 1 ? 12 : voteDir === -1 ? 4 : 6,
+                backgroundColor: voteDir === 1 ? "var(--md-sys-color-primary)" : 
+                                 voteDir === -1 ? "var(--md-sys-color-secondary-container)" : 
+                                 "var(--md-sys-color-surface-container-highest)",
+                color: voteDir === 1 ? "var(--md-sys-color-on-primary)" : 
+                       voteDir === -1 ? "var(--md-sys-color-on-secondary-container)" : 
+                       "var(--md-sys-color-on-surface)"
+              }}
+              transition={{ 
+                duration: 0.3
+              }}
+              className="flex items-center justify-center font-bold text-xs h-full"
+            >
               {localScore > 1000 ? `${(localScore / 1000).toFixed(1)}k` : localScore}
-            </span>
-            <button 
+            </motion.div>
+            <motion.button 
+              initial={false}
               onClick={(e) => handleVote(e, -1)}
-              className={`p-1.5 rounded-md transition-colors rotate-180 h-full flex items-center ${voteDir === -1 ? 'text-[#7193FF] bg-[#7193FF]/10' : 'text-text-secondary hover:bg-hover-bg'}`}
+              animate={{
+                width: 32,
+                borderRadius: voteDir === -1 ? "0px 16px 16px 0px" : 
+                             voteDir === 1 ? "16px 16px 16px 16px" : "0px 16px 16px 0px",
+                marginLeft: voteDir === 1 ? 6 : 0,
+                backgroundColor: voteDir === -1 ? "var(--md-sys-color-secondary-container)" : "var(--md-sys-color-surface-container-highest)",
+                color: voteDir === -1 ? "var(--md-sys-color-on-secondary-container)" : "var(--md-sys-color-on-surface-variant)"
+              }}
+              whileHover={voteDir === 0 ? { backgroundColor: "var(--md-sys-color-surface-container-high)" } : {}}
+              transition={{ 
+                duration: 0.3
+              }}
+              className="relative flex items-center justify-center h-full z-10 overflow-hidden"
             >
-              <ArrowUp size={18} strokeWidth={2.5} />
-            </button>
+              <ArrowUp size={16} strokeWidth={2.5} className="rotate-180" />
+              <Ripple />
+            </motion.button>
           </div>
 
           {/* Comment Pill */}
-          <div className="flex items-center gap-2 bg-bg-secondary rounded-md px-3 h-[36px] text-text-primary hover:bg-hover-bg transition-colors">
+          <div className="relative flex items-center gap-2 bg-bg-highest rounded-full px-3 h-8 text-text-primary hover:bg-hover-bg transition-all active:scale-95 overflow-hidden">
             <MessageSquare size={16} />
-            <span className="text-[13px] font-bold">{post.num_comments}</span>
+            <span className="text-xs font-bold">{post.num_comments}</span>
+            <Ripple />
           </div>
         </div>
 
@@ -409,9 +468,10 @@ export default function PostCard({
               e.stopPropagation();
               setShowMenu(!showMenu);
             }}
-            className="p-2 text-text-secondary hover:text-text-primary hover:bg-hover-bg rounded-md transition-colors"
+            className="relative w-8 h-8 flex items-center justify-center text-text-secondary hover:text-text-primary hover:bg-bg-tertiary rounded-full transition-all active:scale-90 overflow-hidden"
           >
             <MoreVertical size={18} />
+            <Ripple />
           </button>
           
           <AnimatePresence>
@@ -420,28 +480,42 @@ export default function PostCard({
                 initial={{ opacity: 0, scale: 0.95, y: -10 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                className="absolute right-0 bottom-full mb-2 w-48 bg-bg-secondary border border-border-color rounded-xl shadow-2xl z-50 overflow-hidden"
+                className="absolute right-0 bottom-full mb-2 w-48 bg-bg-tertiary rounded-2xl z-50 overflow-hidden"
                 onClick={(e) => e.stopPropagation()}
               >
+                <button 
+                  onClick={() => {
+                    const permalink = `https://reddit.com${post.permalink}`;
+                    navigator.clipboard.writeText(permalink);
+                    setShowMenu(false);
+                  }}
+                  className="relative w-full px-4 py-3 text-left text-sm text-text-primary hover:bg-hover-bg flex items-center gap-2 overflow-hidden"
+                >
+                  <Link size={16} className="text-text-secondary" />
+                  Copy Permalink
+                  <Ripple />
+                </button>
                 <button 
                   onClick={() => {
                     onFilterSubreddit?.(post.subreddit);
                     setShowMenu(false);
                   }}
-                  className="w-full px-4 py-3 text-left text-sm text-text-primary hover:bg-hover-bg flex items-center gap-2"
+                  className="relative w-full px-4 py-3 text-left text-sm text-text-primary hover:bg-hover-bg flex items-center gap-2 overflow-hidden"
                 >
                   <Trash2 size={16} className="text-red-500" />
                   Filter r/{post.subreddit}
+                  <Ripple />
                 </button>
                 <button 
                   onClick={() => {
                     onFilterUser?.(post.author);
                     setShowMenu(false);
                   }}
-                  className="w-full px-4 py-3 text-left text-sm text-text-primary hover:bg-hover-bg flex items-center gap-2"
+                  className="relative w-full px-4 py-3 text-left text-sm text-text-primary hover:bg-hover-bg flex items-center gap-2 overflow-hidden"
                 >
                   <User size={16} className="text-red-500" />
                   Filter u/{post.author}
+                  <Ripple />
                 </button>
               </motion.div>
             )}
@@ -456,10 +530,15 @@ export default function PostCard({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            transition={{ duration: 0.2, ease: "linear" }}
             className="fixed inset-0 z-[1000] flex items-center justify-center pointer-events-none"
           >
             <div className="absolute inset-0 bg-black/95 backdrop-blur-xl" />
-            <div className="relative w-full h-full flex items-center justify-center">
+            <div 
+              className="relative w-full h-full flex items-center justify-center pointer-events-auto"
+              onTouchEnd={handleTouchEnd}
+              onMouseUp={handleTouchEnd}
+            >
               {post.is_video && post.media?.reddit_video ? (
                 <VideoPlayer 
                   src={post.media.reddit_video.fallback_url} 
@@ -491,7 +570,7 @@ export default function PostCard({
                 </div>
               ) : post.is_gallery && post.gallery_data?.items && post.media_metadata ? (
                 <div 
-                  className="w-full h-full flex items-center justify-center relative touch-none"
+                  className="w-full h-full flex items-center justify-center relative touch-none pointer-events-auto"
                   onTouchStart={(e) => {
                     const touch = e.touches[0];
                     (e.currentTarget as any).startX = touch.clientX;
@@ -511,6 +590,7 @@ export default function PostCard({
                         setPeekGalleryIndex(prev => Math.min(post.gallery_data!.items.length - 1, prev + 1));
                       }
                     }
+                    handleTouchEnd();
                   }}
                 >
                   <img 
@@ -532,46 +612,6 @@ export default function PostCard({
                   onContextMenu={(e) => e.preventDefault()}
                   draggable="false"
                 />
-              ) : !post.is_gallery ? (
-                <div className="w-full h-full flex flex-col pointer-events-auto no-callout">
-                  <div className="flex-1 relative bg-bg-primary flex items-center justify-center overflow-hidden no-callout">
-                    {thumbnail ? (
-                      <img 
-                        src={thumbnail}
-                        alt="Preview"
-                        className="w-full h-full object-contain no-callout pointer-events-none"
-                        referrerPolicy="no-referrer"
-                        onContextMenu={(e) => e.preventDefault()}
-                        draggable="false"
-                      />
-                    ) : (
-                      <div className="flex flex-col items-center gap-4 text-text-secondary">
-                        <div className="w-16 h-16 rounded-full bg-hover-bg flex items-center justify-center">
-                          <Maximize2 size={32} />
-                        </div>
-                        <span className="text-xs font-bold uppercase tracking-widest">No Preview Available</span>
-                      </div>
-                    )}
-                  </div>
-                  
-                  <div className="p-6 bg-bg-primary border-t border-border-color flex flex-col gap-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] text-[#FF4500] uppercase font-black tracking-tighter">Link Preview</span>
-                      <span className="text-[10px] text-text-secondary">•</span>
-                      <span className="text-[10px] text-text-secondary font-mono truncate">
-                        {(() => {
-                          try {
-                            return new URL(post.url).hostname;
-                          } catch {
-                            return 'External Link';
-                          }
-                        })()}
-                      </span>
-                    </div>
-                    <h3 className="text-base font-bold text-text-primary line-clamp-2">{post.title}</h3>
-                    <p className="text-xs text-text-secondary truncate">{post.url}</p>
-                  </div>
-                </div>
               ) : null}
             </div>
           </motion.div>

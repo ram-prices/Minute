@@ -6,6 +6,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Hls from 'hls.js';
 import { Volume2, VolumeX, Play, Pause, Maximize } from 'lucide-react';
+import { Ripple } from './Ripple';
 
 interface VideoPlayerProps {
   src: string;
@@ -153,16 +154,19 @@ export default function VideoPlayer({
         <div className={`absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
           <div className="flex items-center justify-between text-white">
             <div className="flex items-center gap-4">
-              <button onClick={togglePlay} className="hover:scale-110 transition-transform">
+              <button onClick={togglePlay} className="relative p-2 hover:scale-110 transition-transform rounded-full overflow-hidden">
                 {isPlaying ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" />}
+                <Ripple />
               </button>
-              <button onClick={toggleMute} className="hover:scale-110 transition-transform">
+              <button onClick={toggleMute} className="relative p-2 hover:scale-110 transition-transform rounded-full overflow-hidden">
                 {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
+                <Ripple />
               </button>
             </div>
             
-            <button onClick={handleFullscreen} className="hover:scale-110 transition-transform">
+            <button onClick={handleFullscreen} className="relative p-2 hover:scale-110 transition-transform rounded-full overflow-hidden">
               <Maximize size={20} />
+              <Ripple />
             </button>
           </div>
         </div>
