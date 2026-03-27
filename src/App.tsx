@@ -78,7 +78,7 @@ export default function App() {
     }
   });
   const [showHeader, setShowHeader] = useState(true);
-  const lastScrollY = useRef(0);
+  const settingsScrollY = useRef(0);
   const observerTarget = useRef<HTMLDivElement>(null);
   const afterRef = useRef<string | null>(null);
   const scrollPositionRef = useRef<number>(0);
@@ -89,18 +89,39 @@ export default function App() {
     const container = feedContainerRef.current;
     if (!container) return;
 
+    let lastScrollY = container.scrollTop;
+    let scrollDirection = 0; // 1 for down, -1 for up
+    let scrollStart = lastScrollY;
+
     const handleScroll = () => {
       const currentScrollY = container.scrollTop;
-      // Only hide if scrolled down more than 100px
-      if (currentScrollY > lastScrollY.current && currentScrollY > 100) {
+      
+      if (currentScrollY <= 100) {
+        setShowHeader(true);
+        lastScrollY = currentScrollY;
+        return;
+      }
+
+      const diff = currentScrollY - lastScrollY;
+      if (diff === 0) return;
+
+      const currentDirection = diff > 0 ? 1 : -1;
+
+      if (currentDirection !== scrollDirection) {
+        scrollDirection = currentDirection;
+        scrollStart = currentScrollY;
+      }
+
+      if (scrollDirection === 1 && currentScrollY - scrollStart > 20) {
         setShowHeader(false);
-      } else {
+      } else if (scrollDirection === -1 && scrollStart - currentScrollY > 20) {
         setShowHeader(true);
       }
-      lastScrollY.current = currentScrollY;
+      
+      lastScrollY = currentScrollY;
     };
 
-    container.addEventListener('scroll', handleScroll);
+    container.addEventListener('scroll', handleScroll, { passive: true });
     return () => container.removeEventListener('scroll', handleScroll);
   }, [view, selectedPost]);
 
@@ -951,19 +972,20 @@ export default function App() {
               opacity: { duration: 0.3, ease: "linear" }
             }}
             className="absolute inset-0 flex flex-col w-full h-full bg-bg-primary overflow-y-auto"
-            ref={(node) => {
-              if (node) {
-                const handleScroll = () => {
-                  const currentScrollY = node.scrollTop;
-                  if (currentScrollY > lastScrollY.current && currentScrollY > 100) {
-                    setShowHeader(false);
-                  } else {
-                    setShowHeader(true);
-                  }
-                  lastScrollY.current = currentScrollY;
-                };
-                node.addEventListener('scroll', handleScroll);
-                return () => node.removeEventListener('scroll', handleScroll);
+            onScroll={(e) => {
+              const currentScrollY = e.currentTarget.scrollTop;
+              if (currentScrollY <= 100) {
+                setShowHeader(true);
+                settingsScrollY.current = currentScrollY;
+                return;
+              }
+              const diff = currentScrollY - settingsScrollY.current;
+              if (diff > 20) {
+                setShowHeader(false);
+                settingsScrollY.current = currentScrollY;
+              } else if (diff < -20) {
+                setShowHeader(true);
+                settingsScrollY.current = currentScrollY;
               }
             }}
           >
@@ -1341,10 +1363,13 @@ export default function App() {
                     }}
                   >
                     <img 
-                      src={fullViewMediaPost.media_metadata[fullViewMediaPost.gallery_data.items[galleryIndex].media_id].s.u.replace(/&amp;/g, '&')} 
+                      src={fullViewMediaPost.media_metadata[fullViewMediaPost.gallery_data.items[galleryIndex].media_id]?.s?.u?.replace(/&amp;/g, '&') || ''} 
                       alt="" 
                       className="w-full h-full object-contain"
                       referrerPolicy="no-referrer"
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                      }}
                     />
                     <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/50 px-2 py-1 rounded text-white text-xs">
                       {galleryIndex + 1} / {fullViewMediaPost.gallery_data.items.length}
@@ -1384,6 +1409,9 @@ export default function App() {
                         alt="" 
                         className="w-full h-full object-contain"
                         referrerPolicy="no-referrer"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                        }}
                       />
                     );
                   }

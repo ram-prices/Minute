@@ -40,29 +40,34 @@ export default function Flair({ text, richtext, backgroundColor, textColor, clas
 
   return (
     <span 
-      className={`px-2 py-0.5 text-xs rounded-full font-medium flex items-center gap-1 w-fit ${className}`}
+      className={`px-2 py-0.5 text-xs rounded-full font-medium inline-flex items-center gap-1 min-w-0 max-w-full ${className}`}
       style={{ backgroundColor: bg, color }}
     >
       {richtext && richtext.length > 0 ? (
-        richtext.map((part, i) => {
-          if (part.e === 'text') {
-            return <span key={i}>{decodeHtml(part.t || '')}</span>;
-          }
-          if (part.e === 'emoji') {
-            return (
-              <img 
-                key={i}
-                src={part.u.replace(/&amp;/g, '&')} 
-                alt={part.a} 
-                className="w-3.5 h-3.5 object-contain"
-                referrerPolicy="no-referrer"
-              />
-            );
-          }
-          return null;
-        })
+        <span className="flex items-center gap-1 min-w-0 overflow-hidden">
+          {richtext.map((part, i) => {
+            if (part.e === 'text') {
+              return <span key={i} className="truncate block min-w-0">{decodeHtml(part.t || '')}</span>;
+            }
+            if (part.e === 'emoji') {
+              return (
+                <img 
+                  key={i}
+                  src={part.u.replace(/&amp;/g, '&')} 
+                  alt={part.a} 
+                  className="w-3.5 h-3.5 object-contain shrink-0"
+                  referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                  }}
+                />
+              );
+            }
+            return null;
+          })}
+        </span>
       ) : (
-        <span>{decodeHtml(text || '')}</span>
+        <span className="truncate block min-w-0">{decodeHtml(text || '')}</span>
       )}
     </span>
   );

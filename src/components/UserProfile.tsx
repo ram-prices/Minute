@@ -61,17 +61,38 @@ export default function UserProfile({
     const container = scrollContainerRef.current;
     if (!container) return;
 
+    let scrollDirection = 0;
+    let scrollStart = container.scrollTop;
+
     const handleScroll = () => {
       const currentScrollY = container.scrollTop;
-      if (currentScrollY > lastScrollY.current && currentScrollY > 100) {
+      
+      if (currentScrollY <= 100) {
+        setShowHeader(true);
+        lastScrollY.current = currentScrollY;
+        return;
+      }
+
+      const diff = currentScrollY - lastScrollY.current;
+      if (diff === 0) return;
+
+      const currentDirection = diff > 0 ? 1 : -1;
+
+      if (currentDirection !== scrollDirection) {
+        scrollDirection = currentDirection;
+        scrollStart = currentScrollY;
+      }
+
+      if (scrollDirection === 1 && currentScrollY - scrollStart > 20) {
         setShowHeader(false);
-      } else {
+      } else if (scrollDirection === -1 && scrollStart - currentScrollY > 20) {
         setShowHeader(true);
       }
+      
       lastScrollY.current = currentScrollY;
     };
 
-    container.addEventListener('scroll', handleScroll);
+    container.addEventListener('scroll', handleScroll, { passive: true });
     return () => container.removeEventListener('scroll', handleScroll);
   }, []);
 

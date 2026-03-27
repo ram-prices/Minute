@@ -15,6 +15,7 @@ export interface RedditPost {
   permalink: string;
   created_utc: number;
   selftext?: string;
+  selftext_html?: string;
   link_flair_text?: string;
   link_flair_background_color?: string;
   link_flair_text_color?: string;
@@ -67,6 +68,7 @@ export interface RedditComment {
   id: string;
   author: string;
   body: string;
+  body_html?: string;
   score: number;
   created_utc: number;
   permalink: string;

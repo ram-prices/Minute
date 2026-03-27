@@ -137,13 +137,13 @@
       --md-sys-color-error-container: #93000A;
       --md-sys-color-on-error-container: #FFDAD6;
       
-      --md-sys-color-surface: #1C1B17;
-      --md-sys-color-surface-dim: #141310;
-      --md-sys-color-surface-container-lowest: #0F0E0C;
-      --md-sys-color-surface-container-low: #23211C;
-      --md-sys-color-surface-container: #2D2A24;
-      --md-sys-color-surface-container-high: #38342D;
-      --md-sys-color-surface-container-highest: #433E36;
+      --md-sys-color-surface: #2A2A2A;
+      --md-sys-color-surface-dim: #202020;
+      --md-sys-color-surface-container-lowest: #1A1A1A;
+      --md-sys-color-surface-container-low: #2E2E2E;
+      --md-sys-color-surface-container: #363636;
+      --md-sys-color-surface-container-high: #3E3E3E;
+      --md-sys-color-surface-container-highest: #464646;
       
       --md-sys-color-on-surface: #E6E2D9;
       --md-sys-color-on-surface-variant: #CBC7BA;
@@ -196,13 +196,13 @@
     --md-sys-color-error-container: #93000A;
     --md-sys-color-on-error-container: #FFDAD6;
     
-    --md-sys-color-surface: #1C1B17;
-    --md-sys-color-surface-dim: #141310;
-    --md-sys-color-surface-container-lowest: #0F0E0C;
-    --md-sys-color-surface-container-low: #23211C;
-    --md-sys-color-surface-container: #2D2A24;
-    --md-sys-color-surface-container-high: #38342D;
-    --md-sys-color-surface-container-highest: #433E36;
+    --md-sys-color-surface: #2A2A2A;
+    --md-sys-color-surface-dim: #202020;
+    --md-sys-color-surface-container-lowest: #1A1A1A;
+    --md-sys-color-surface-container-low: #2E2E2E;
+    --md-sys-color-surface-container: #363636;
+    --md-sys-color-surface-container-high: #3E3E3E;
+    --md-sys-color-surface-container-highest: #464646;
     
     --md-sys-color-on-surface: #E6E2D9;
     --md-sys-color-on-surface-variant: #CBC7BA;

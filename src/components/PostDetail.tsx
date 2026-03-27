@@ -40,6 +40,9 @@ const RedditTitle = ({ title, metadata }: { title: string; metadata?: any }) => 
                 alt={`:${name}:`} 
                 className="reddit-emoji"
                 referrerPolicy="no-referrer"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                }}
               />
             );
           }
@@ -104,17 +107,38 @@ export default function PostDetail({
       }
 
       // Add scroll listener for header visibility
+      let scrollDirection = 0;
+      let scrollStart = node.scrollTop;
+      
       const handleScroll = () => {
         const currentScrollY = node.scrollTop;
-        if (currentScrollY > lastScrollY.current && currentScrollY > 100) {
+        
+        if (currentScrollY <= 100) {
+          setShowHeader(true);
+          lastScrollY.current = currentScrollY;
+          return;
+        }
+
+        const diff = currentScrollY - lastScrollY.current;
+        if (diff === 0) return;
+
+        const currentDirection = diff > 0 ? 1 : -1;
+
+        if (currentDirection !== scrollDirection) {
+          scrollDirection = currentDirection;
+          scrollStart = currentScrollY;
+        }
+
+        if (scrollDirection === 1 && currentScrollY - scrollStart > 20) {
           setShowHeader(false);
-        } else {
+        } else if (scrollDirection === -1 && scrollStart - currentScrollY > 20) {
           setShowHeader(true);
         }
+        
         lastScrollY.current = currentScrollY;
       };
 
-      node.addEventListener('scroll', handleScroll);
+      node.addEventListener('scroll', handleScroll, { passive: true });
       return () => node.removeEventListener('scroll', handleScroll);
     }
   }, [commentStack.length]);
@@ -366,29 +390,29 @@ export default function PostDetail({
               <UserAvatar username={post.author} size={14} iconClassName="text-text-secondary" />
               <Ripple />
             </button>
-            <div className="flex items-center flex-wrap gap-x-1.5 gap-y-0.5 text-xs text-text-secondary opacity-70 hover:opacity-100 transition-opacity">
+            <div className="flex items-center gap-x-1.5 text-xs text-text-secondary opacity-70 hover:opacity-100 transition-opacity overflow-hidden whitespace-nowrap">
               <button 
                 onClick={(e) => {
                   e.stopPropagation();
                   onUserClick?.(post.author);
                 }}
-                className="relative font-bold text-text-primary hover:underline px-1 -mx-1 rounded-md overflow-hidden"
+                className="relative font-bold text-text-primary hover:underline px-1 -mx-1 rounded-md overflow-hidden shrink-0"
               >
-                u/{post.author}
+                <span className="block">u/{post.author}</span>
                 <Ripple />
               </button>
               <Flair 
                 text={post.author_flair_text} 
                 richtext={post.author_flair_richtext}
-                className="origin-left"
+                className="origin-left shrink min-w-0"
               />
-              <span className="opacity-50">•</span>
-              <span className="opacity-75">{formatTimestamp(post.created_utc)}</span>
+              <span className="opacity-50 shrink-0">•</span>
+              <span className="opacity-75 shrink-0">{formatTimestamp(post.created_utc)}</span>
             </div>
           </div>
           
           <div className="flex flex-col gap-1">
-            <h1 className="text-base md:text-lg font-display font-semibold text-text-primary leading-tight break-anywhere tracking-tight">
+            <h1 className="text-base md:text-lg font-medium text-text-primary leading-tight break-anywhere tracking-tight">
               <RedditTitle title={post.title} metadata={post.media_metadata} />
             </h1>
             {post.link_flair_text && (
@@ -457,6 +481,9 @@ export default function PostDetail({
                       className="w-full h-auto max-h-[70vh] object-contain shrink-0 snap-center cursor-pointer"
                       referrerPolicy="no-referrer"
                       onClick={() => onMediaClick?.(post, index)}
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                      }}
                     />
                   );
                 })}
@@ -472,6 +499,9 @@ export default function PostDetail({
                   referrerPolicy="no-referrer"
                   onContextMenu={(e) => e.preventDefault()}
                   draggable="false"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                  }}
                 />
               </div>
             )}
@@ -488,7 +518,15 @@ export default function PostDetail({
                 >
                   {post.thumbnail && post.thumbnail.startsWith('http') && (
                     <div className="w-16 h-16 shrink-0 rounded-xl overflow-hidden bg-bg-secondary">
-                      <img src={post.thumbnail} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                      <img 
+                        src={post.thumbnail} 
+                        alt="" 
+                        className="w-full h-full object-cover" 
+                        referrerPolicy="no-referrer" 
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                        }}
+                      />
                     </div>
                   )}
                   <div className="flex-1 min-w-0">
@@ -955,22 +993,24 @@ function CommentItem({
         (isLast && !rendersReplies) ? 'rounded-l-2xl rounded-tr-none rounded-br-2xl' :
         'rounded-l-2xl rounded-r-none'
       }`}>
-        <div className="flex items-center gap-2 text-xs text-text-secondary">
+        <div className="flex items-center gap-1.5 text-xs text-text-secondary overflow-hidden whitespace-nowrap">
           <button 
             onClick={() => onUserClick?.(comment.author)}
-            className="relative flex items-center gap-1.5 hover:underline overflow-hidden"
+            className="relative flex items-center gap-1.5 hover:underline overflow-hidden shrink-0"
           >
             <div className="w-5 h-5 rounded-full bg-bg-tertiary flex items-center justify-center overflow-hidden shrink-0">
               <UserAvatar username={comment.author} size={12} iconClassName="text-text-secondary" />
             </div>
-            <span className="font-bold text-text-primary">u/{comment.author}</span>
+            <span className="font-bold text-text-primary shrink-0">u/{comment.author}</span>
             <Ripple />
           </button>
-          <span className="opacity-75">• {formatTimestamp(comment.created_utc)}</span>
           <Flair 
             text={comment.author_flair_text} 
             richtext={comment.author_flair_richtext}
+            className="shrink min-w-0"
           />
+          <span className="opacity-50 shrink-0">•</span>
+          <span className="opacity-75 shrink-0">{formatTimestamp(comment.created_utc)}</span>
         </div>
         <div className="text-sm text-text-primary leading-relaxed prose dark:prose-invert prose-sm max-w-none break-anywhere">
           <RedditMarkdown content={comment.body} metadata={comment.media_metadata} />

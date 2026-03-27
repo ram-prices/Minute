@@ -51,6 +51,9 @@ const RedditTitle = ({ title, metadata }: { title: string; metadata?: any }) => 
                 alt={`:${name}:`} 
                 className="reddit-emoji"
                 referrerPolicy="no-referrer"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                }}
               />
             );
           }
@@ -268,45 +271,45 @@ export default function PostCard({
           )}
           <Ripple />
         </button>
-        <div className="flex items-center flex-wrap gap-x-1.5 gap-y-0.5 text-xs text-text-secondary opacity-70 group-hover:opacity-100 transition-opacity">
+        <div className="flex items-center gap-x-1.5 text-xs text-text-secondary opacity-70 group-hover:opacity-100 transition-opacity overflow-hidden">
           <button 
             onClick={(e) => {
               e.stopPropagation();
               onSubredditClick?.(post.subreddit);
             }}
-            className="relative font-medium hover:underline px-1 -mx-1 rounded-md overflow-hidden"
+            className="relative font-medium hover:underline px-1 -mx-1 rounded-md overflow-hidden shrink-0"
           >
             r/{post.subreddit}
             <Ripple />
           </button>
-          <span className="opacity-50">•</span>
+          <span className="opacity-50 shrink-0">•</span>
           <button 
             onClick={(e) => {
               e.stopPropagation();
               onUserClick?.(post.author);
             }}
-            className="relative hover:underline opacity-75 flex items-center gap-1.5 px-1 -mx-1 rounded-md overflow-hidden"
+            className="relative hover:underline opacity-75 flex items-center gap-1.5 px-1 -mx-1 rounded-md overflow-hidden shrink-0"
           >
             <div className="w-4 h-4 rounded-full bg-bg-tertiary flex items-center justify-center overflow-hidden shrink-0">
               <UserAvatar username={post.author} size={10} iconClassName="text-text-secondary" />
             </div>
-            u/{post.author}
-            <Flair 
-              text={post.author_flair_text} 
-              richtext={post.author_flair_richtext}
-              className="origin-left"
-            />
+            <span className="shrink-0">u/{post.author}</span>
             <Ripple />
           </button>
-          <span className="opacity-50">•</span>
-          <span className="opacity-75">{formatTimestamp(post.created_utc)}</span>
+          <Flair 
+            text={post.author_flair_text} 
+            richtext={post.author_flair_richtext}
+            className="origin-left shrink min-w-0"
+          />
+          <span className="opacity-50 shrink-0">•</span>
+          <span className="opacity-75 shrink-0">{formatTimestamp(post.created_utc)}</span>
         </div>
       </div>
 
       {/* Title and Thumbnail Row */}
       <div className="flex gap-3 mb-2">
         <div className="flex-1 min-w-0">
-          <h2 className="text-sm md:text-base font-display font-medium text-text-primary leading-tight break-anywhere mb-1 tracking-tight">
+          <h2 className="text-sm md:text-base font-medium text-text-primary leading-tight break-anywhere mb-1 tracking-tight">
             <RedditTitle title={post.title} metadata={post.media_metadata} />
           </h2>
           {post.link_flair_text && (
@@ -350,6 +353,9 @@ export default function PostCard({
               referrerPolicy="no-referrer"
               onContextMenu={(e) => e.preventDefault()}
               draggable="false"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none';
+              }}
             />
             {post.is_video && (
               <div className="absolute bottom-1 right-1 p-1 bg-black/60 rounded-md text-white">
@@ -379,7 +385,7 @@ export default function PostCard({
       {isTextPost && !thumbnail && (
         <div className="bg-bg-tertiary rounded-2xl p-3 mb-2">
           <div className="text-[13px] text-text-primary opacity-80 leading-snug line-clamp-5">
-            <RedditMarkdown content={post.selftext} />
+            <RedditMarkdown content={post.selftext} metadata={post.media_metadata} />
           </div>
         </div>
       )}
@@ -594,7 +600,7 @@ export default function PostCard({
                   }}
                 >
                   <img 
-                    src={post.media_metadata[post.gallery_data.items[peekGalleryIndex].media_id].s.u.replace(/&amp;/g, '&')} 
+                    src={post.media_metadata[post.gallery_data.items[peekGalleryIndex].media_id]?.s?.u?.replace(/&amp;/g, '&') || ''} 
                     alt="" 
                     className="w-full h-full object-contain"
                     referrerPolicy="no-referrer"
@@ -611,6 +617,9 @@ export default function PostCard({
                   referrerPolicy="no-referrer"
                   onContextMenu={(e) => e.preventDefault()}
                   draggable="false"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                  }}
                 />
               ) : null}
             </div>
