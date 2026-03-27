@@ -3,6 +3,7 @@ import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import { decodeHtml } from '../lib/decode';
+import { getProxiedMediaUrl } from '../lib/media';
 
 const RedditMarkdown = ({ content, metadata }: { content: string; metadata?: any }) => {
   if (!content) return null;
@@ -121,7 +122,7 @@ const RedditMarkdown = ({ content, metadata }: { content: string; metadata?: any
           if (isVideo) {
             return (
               <video 
-                src={src} 
+                src={src ? getProxiedMediaUrl(src) : undefined} 
                 className={`${props.className || ''} max-w-full rounded-lg`} 
                 autoPlay 
                 loop 
@@ -137,7 +138,7 @@ const RedditMarkdown = ({ content, metadata }: { content: string; metadata?: any
           return (
             <img 
               {...props} 
-              src={src}
+              src={src ? getProxiedMediaUrl(src) : undefined}
               className={isEmoji ? 'reddit-emoji' : `${props.className || ''} max-w-full rounded-lg`} 
               referrerPolicy="no-referrer"
               loading="lazy"

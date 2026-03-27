@@ -66,6 +66,48 @@ async function startServer() {
     }
   });
 
+  app.get("/api/media-proxy", async (req, res) => {
+    const url = req.query.url as string;
+    if (!url || !url.startsWith('https://')) {
+      return res.status(400).json({ error: 'Invalid URL' });
+    }
+    // Allowlist only known Reddit/media domains
+    const allowed = ['v.redd.it', 'i.redd.it', 'preview.redd.it',
+                     'i.imgur.com', 'media.giphy.com', 'media.tenor.com', 'tenor.com', 'giphy.com'];
+    try {
+      const host = new URL(url).hostname;
+      if (!allowed.some(d => host.endsWith(d))) {
+        return res.status(403).json({ error: 'Domain not allowed' });
+      }
+      const response = await fetch(url, {
+        headers: { 'User-Agent': 'MinutePWA/1.0.0' }
+      });
+      res.setHeader('Content-Type', response.headers.get('content-type') ?? 'video/mp4');
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+      
+      if (response.body) {
+        // @ts-ignore - node fetch stream types
+        const reader = response.body.getReader();
+        const pump = async () => {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) {
+              res.end();
+              break;
+            }
+            res.write(value);
+          }
+        };
+        await pump();
+      } else {
+        res.end();
+      }
+    } catch (error) {
+      console.error('Media proxy error:', error);
+      res.status(502).json({ error: 'Upstream fetch failed' });
+    }
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({

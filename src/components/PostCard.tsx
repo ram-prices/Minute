@@ -16,6 +16,7 @@ import RedditMarkdown from './RedditMarkdown';
 import { Ripple } from './Ripple';
 import { decodeHtml } from '../lib/decode';
 import { formatTimestamp } from '../lib/time';
+import { getGifUrl, getProxiedMediaUrl } from '../lib/media';
 
 let isGlobalScrolling = false;
 let globalScrollTimer: NodeJS.Timeout | null = null;
@@ -167,8 +168,9 @@ export default function PostCard({
     const isImage = post.post_hint === 'image' || post.url?.match(/\.(jpg|jpeg|png|gif)$/i);
     const streamableId = getStreamableId(post.url);
     const isSocial = getTwitterId(post.url) || getBlueskyId(post.url);
+    const isGif = getGifUrl(post) !== null;
     
-    if (!isGallery && !isVideo && !isImage && !streamableId && !isSocial) {
+    if (!isGallery && !isVideo && !isImage && !streamableId && !isSocial && !isGif) {
       return;
     }
 
@@ -271,7 +273,7 @@ export default function PostCard({
           )}
           <Ripple />
         </button>
-        <div className="flex items-center gap-x-1.5 text-xs text-text-secondary opacity-70 group-hover:opacity-100 transition-opacity overflow-hidden">
+        <div className="flex items-center gap-x-1.5 text-xs text-text-secondary opacity-70 group-hover:opacity-100 transition-opacity overflow-hidden whitespace-nowrap">
           <button 
             onClick={(e) => {
               e.stopPropagation();
@@ -545,83 +547,123 @@ export default function PostCard({
               onTouchEnd={handleTouchEnd}
               onMouseUp={handleTouchEnd}
             >
-              {post.is_video && post.media?.reddit_video ? (
-                <VideoPlayer 
-                  src={post.media.reddit_video.fallback_url} 
-                  hlsUrl={post.media.reddit_video.hls_url}
-                  className="w-full h-full object-contain"
-                  autoPlay
-                  muted={true}
-                  controls={false}
-                />
-              ) : getTwitterId(post.url) ? (
-                <div className="w-full max-w-lg p-4 pointer-events-auto">
-                  <SocialEmbed url={post.url} type="twitter" />
-                </div>
-              ) : getBlueskyId(post.url) ? (
-                <div className="w-full max-w-lg p-4 pointer-events-auto">
-                  <SocialEmbed url={post.url} type="bluesky" />
-                </div>
-              ) : getStreamableId(post.url) ? (
-                <div className="w-full h-full bg-black flex flex-col pointer-events-auto relative">
-                  <ReactPlayer
-                    url={post.url}
-                    playing={true}
-                    muted={true}
-                    controls={true}
-                    width="100%"
-                    height="100%"
-                    style={{ position: 'absolute', top: 0, left: 0 }}
-                  />
-                </div>
-              ) : post.is_gallery && post.gallery_data?.items && post.media_metadata ? (
-                <div 
-                  className="w-full h-full flex items-center justify-center relative touch-none pointer-events-auto"
-                  onTouchStart={(e) => {
-                    const touch = e.touches[0];
-                    (e.currentTarget as any).startX = touch.clientX;
-                    (e.currentTarget as any).startTime = Date.now();
-                  }}
-                  onTouchEnd={(e) => {
-                    const touch = e.changedTouches[0];
-                    const startX = (e.currentTarget as any).startX;
-                    const startTime = (e.currentTarget as any).startTime;
-                    const diff = touch.clientX - startX;
-                    const timeDiff = Date.now() - startTime;
-                    
-                    if (Math.abs(diff) > 50 && timeDiff < 300) {
-                      if (diff > 0) { // Right swipe - previous
-                        setPeekGalleryIndex(prev => Math.max(0, prev - 1));
-                      } else { // Left swipe - next
-                        setPeekGalleryIndex(prev => Math.min(post.gallery_data!.items.length - 1, prev + 1));
-                      }
-                    }
-                    handleTouchEnd();
-                  }}
-                >
-                  <img 
-                    src={post.media_metadata[post.gallery_data.items[peekGalleryIndex].media_id]?.s?.u?.replace(/&amp;/g, '&') || ''} 
-                    alt="" 
-                    className="w-full h-full object-contain"
-                    referrerPolicy="no-referrer"
-                  />
-                  <div className="absolute bottom-8 left-1/2 -translate-x-1/2 bg-black/50 px-3 py-1.5 rounded-full text-white text-xs font-medium">
-                    {peekGalleryIndex + 1} / {post.gallery_data.items.length}
-                  </div>
-                </div>
-              ) : post.post_hint === 'image' || post.url?.match(/\.(jpg|jpeg|png|gif)$/i) ? (
-                <img 
-                  src={post.url} 
-                  alt="" 
-                  className="w-full h-full object-contain no-callout pointer-events-none"
-                  referrerPolicy="no-referrer"
-                  onContextMenu={(e) => e.preventDefault()}
-                  draggable="false"
-                  onError={(e) => {
-                    e.currentTarget.style.display = 'none';
-                  }}
-                />
-              ) : null}
+              {(() => {
+                const gif = getGifUrl(post);
+                if (gif) {
+                  if (gif.type === 'hls' || gif.type === 'mp4') {
+                    return (
+                      <VideoPlayer 
+                        src={getProxiedMediaUrl(gif.url)} 
+                        hlsUrl={gif.type === 'hls' ? getProxiedMediaUrl(gif.url) : undefined}
+                        className="w-full h-full object-contain"
+                        autoPlay
+                        muted={true}
+                        controls={false}
+                      />
+                    );
+                  } else {
+                    return (
+                      <img 
+                        src={getProxiedMediaUrl(gif.url)} 
+                        alt={post.title} 
+                        className="w-full h-full object-contain pointer-events-none"
+                        referrerPolicy="no-referrer"
+                        onContextMenu={(e) => e.preventDefault()}
+                        draggable="false"
+                      />
+                    );
+                  }
+                }
+                
+                if (getTwitterId(post.url)) {
+                  return (
+                    <div className="w-full max-w-lg p-4 pointer-events-auto">
+                      <SocialEmbed url={post.url} type="twitter" />
+                    </div>
+                  );
+                }
+                
+                if (getBlueskyId(post.url)) {
+                  return (
+                    <div className="w-full max-w-lg p-4 pointer-events-auto">
+                      <SocialEmbed url={post.url} type="bluesky" />
+                    </div>
+                  );
+                }
+                
+                if (getStreamableId(post.url)) {
+                  return (
+                    <div className="w-full h-full bg-black flex flex-col pointer-events-auto relative">
+                      <ReactPlayer
+                        url={post.url}
+                        playing={true}
+                        muted={true}
+                        controls={true}
+                        width="100%"
+                        height="100%"
+                        style={{ position: 'absolute', top: 0, left: 0 }}
+                      />
+                    </div>
+                  );
+                }
+                
+                if (post.is_gallery && post.gallery_data?.items && post.media_metadata) {
+                  return (
+                    <div 
+                      className="w-full h-full flex items-center justify-center relative touch-none pointer-events-auto"
+                      onTouchStart={(e) => {
+                        const touch = e.touches[0];
+                        (e.currentTarget as any).startX = touch.clientX;
+                        (e.currentTarget as any).startTime = Date.now();
+                      }}
+                      onTouchEnd={(e) => {
+                        const touch = e.changedTouches[0];
+                        const startX = (e.currentTarget as any).startX;
+                        const startTime = (e.currentTarget as any).startTime;
+                        const diff = touch.clientX - startX;
+                        const timeDiff = Date.now() - startTime;
+                        
+                        if (Math.abs(diff) > 50 && timeDiff < 300) {
+                          if (diff > 0) { // Right swipe - previous
+                            setPeekGalleryIndex(prev => Math.max(0, prev - 1));
+                          } else { // Left swipe - next
+                            setPeekGalleryIndex(prev => Math.min(post.gallery_data!.items.length - 1, prev + 1));
+                          }
+                        }
+                        handleTouchEnd();
+                      }}
+                    >
+                      <img 
+                        src={post.media_metadata[post.gallery_data.items[peekGalleryIndex].media_id]?.s?.u?.replace(/&amp;/g, '&') || ''} 
+                        alt="" 
+                        className="w-full h-full object-contain"
+                        referrerPolicy="no-referrer"
+                      />
+                      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 bg-black/50 px-3 py-1.5 rounded-full text-white text-xs font-medium">
+                        {peekGalleryIndex + 1} / {post.gallery_data.items.length}
+                      </div>
+                    </div>
+                  );
+                }
+                
+                if (post.post_hint === 'image' || post.url?.match(/\.(jpg|jpeg|png)$/i)) {
+                  return (
+                    <img 
+                      src={post.url} 
+                      alt="" 
+                      className="w-full h-full object-contain no-callout pointer-events-none"
+                      referrerPolicy="no-referrer"
+                      onContextMenu={(e) => e.preventDefault()}
+                      draggable="false"
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                      }}
+                    />
+                  );
+                }
+                
+                return null;
+              })()}
             </div>
           </motion.div>
         )}

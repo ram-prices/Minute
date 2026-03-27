@@ -15,6 +15,7 @@ import { Search, RefreshCw, Home, TrendingUp, Hash, Settings, X, Smartphone, Glo
 import { motion, AnimatePresence } from 'motion/react';
 import ReactPlayer from 'react-player';
 import { SquigglyLoader } from './components/SquigglyLoader';
+import { getGifUrl, getProxiedMediaUrl } from './lib/media';
 
 export default function App() {
   const [view, setView] = useState<'feed' | 'settings' | 'profile'>('feed');
@@ -539,8 +540,9 @@ export default function App() {
     const isVideo = post.is_video && post.media?.reddit_video;
     const isImage = post.post_hint === 'image' || post.url?.match(/\.(jpg|jpeg|png|gif)$/i);
     const streamableId = getStreamableId(post.url);
+    const isGif = getGifUrl(post) !== null;
     
-    if (!isGallery && !isVideo && !isImage && !streamableId) {
+    if (!isGallery && !isVideo && !isImage && !streamableId && !isGif) {
       window.open(post.url, '_blank');
       return;
     }
@@ -1375,17 +1377,36 @@ export default function App() {
                       {galleryIndex + 1} / {fullViewMediaPost.gallery_data.items.length}
                     </div>
                   </div>
-                ) : fullViewMediaPost.is_video && fullViewMediaPost.media?.reddit_video ? (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <VideoPlayer 
-                      src={fullViewMediaPost.media.reddit_video.fallback_url} 
-                      hlsUrl={fullViewMediaPost.media.reddit_video.hls_url}
-                      autoPlay={false}
-                      muted={false}
-                      className="w-full h-full"
-                    />
-                  </div>
                 ) : (() => {
+                  const gif = getGifUrl(fullViewMediaPost);
+                  if (gif) {
+                    if (gif.type === 'hls' || gif.type === 'mp4') {
+                      return (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <VideoPlayer 
+                            src={getProxiedMediaUrl(gif.url)} 
+                            hlsUrl={gif.type === 'hls' ? getProxiedMediaUrl(gif.url) : undefined}
+                            autoPlay={true}
+                            muted={false}
+                            className="w-full h-full"
+                          />
+                        </div>
+                      );
+                    } else {
+                      return (
+                        <img 
+                          src={getProxiedMediaUrl(gif.url)} 
+                          alt="" 
+                          className="w-full h-full object-contain"
+                          referrerPolicy="no-referrer"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                          }}
+                        />
+                      );
+                    }
+                  }
+                  
                   const streamableId = getStreamableId(fullViewMediaPost.url);
                   if (streamableId) {
                     return (
@@ -1402,7 +1423,7 @@ export default function App() {
                       </div>
                     );
                   }
-                  if (fullViewMediaPost.post_hint === 'image' || fullViewMediaPost.url?.match(/\.(jpg|jpeg|png|gif)$/i)) {
+                  if (fullViewMediaPost.post_hint === 'image' || fullViewMediaPost.url?.match(/\.(jpg|jpeg|png)$/i)) {
                     return (
                       <img 
                         src={fullViewMediaPost.url} 

@@ -18,6 +18,7 @@ import SocialEmbed from './SocialEmbed';
 import { Ripple } from './Ripple';
 import { decodeHtml } from '../lib/decode';
 import { formatTimestamp } from '../lib/time';
+import { getGifUrl, getProxiedMediaUrl } from '../lib/media';
 
 const RedditTitle = ({ title, metadata }: { title: string; metadata?: any }) => {
   if (!title) return null;
@@ -490,25 +491,61 @@ export default function PostDetail({
               </div>
             )}
 
-            {!post.is_video && !post.is_gallery && post.url && post.url.match(/\.(jpg|jpeg|png|gif)$/) && (
-              <div className="w-full no-callout bg-black">
-                <img 
-                  src={post.url} 
-                  alt={post.title} 
-                  className="w-full h-auto no-callout pointer-events-none"
-                  referrerPolicy="no-referrer"
-                  onContextMenu={(e) => e.preventDefault()}
-                  draggable="false"
-                  onError={(e) => {
-                    e.currentTarget.style.display = 'none';
-                  }}
-                />
-              </div>
-            )}
+            {(() => {
+              const gif = getGifUrl(post);
+              if (gif && !post.is_video) { // if is_video is true, it's handled above
+                return (
+                  <div className="w-full no-callout bg-black">
+                    {gif.type === 'mp4' ? (
+                      <video 
+                        src={getProxiedMediaUrl(gif.url)} 
+                        autoPlay 
+                        loop 
+                        muted 
+                        playsInline 
+                        className="w-full h-auto max-h-[80vh] object-contain no-callout pointer-events-none"
+                        onContextMenu={(e) => e.preventDefault()}
+                      />
+                    ) : (
+                      <img 
+                        src={getProxiedMediaUrl(gif.url)} 
+                        alt={post.title} 
+                        className="w-full h-auto no-callout pointer-events-none"
+                        referrerPolicy="no-referrer"
+                        onContextMenu={(e) => e.preventDefault()}
+                        draggable="false"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                        }}
+                      />
+                    )}
+                  </div>
+                );
+              }
+              
+              if (!post.is_video && !post.is_gallery && post.url && (post.post_hint === 'image' || post.url.match(/\.(jpg|jpeg|png)$/i))) {
+                return (
+                  <div className="w-full no-callout bg-black">
+                    <img 
+                      src={post.url} 
+                      alt={post.title} 
+                      className="w-full h-auto no-callout pointer-events-none"
+                      referrerPolicy="no-referrer"
+                      onContextMenu={(e) => e.preventDefault()}
+                      draggable="false"
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                      }}
+                    />
+                  </div>
+                );
+              }
+              return null;
+            })()}
 
             {/* Link Post Button */}
             {((post.post_hint === 'link') || (post.url && !post.url.includes('reddit.com/r/') && post.domain && !post.domain.startsWith('self.'))) && 
-             !post.is_video && !post.is_gallery && !post.url.match(/\.(jpg|jpeg|png|gif|mp4|webm)$/) && !getStreamableId(post.url) && (
+             !post.is_video && !post.is_gallery && !post.url.match(/\.(jpg|jpeg|png|gif|mp4|webm)$/) && !getStreamableId(post.url) && !getGifUrl(post) && (
               <div className="p-4 bg-bg-secondary">
                 <a 
                   href={post.url} 
