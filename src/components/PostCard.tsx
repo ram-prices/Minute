@@ -10,6 +10,7 @@ import { UserAvatar } from './UserAvatar';
 import { motion, AnimatePresence } from 'motion/react';
 import ReactPlayer from 'react-player';
 import VideoPlayer from './VideoPlayer';
+import M3ExpressiveCarousel from './M3ExpressiveCarousel';
 import Flair from './Flair';
 import SocialEmbed from './SocialEmbed';
 import RedditMarkdown from './RedditMarkdown';
@@ -618,43 +619,17 @@ export default function PostCard({
                 }
                 
                 if (post.is_gallery && post.gallery_data?.items && post.media_metadata) {
-                  return (
-                    <div 
-                      className="w-full h-full flex items-center justify-center relative touch-none pointer-events-auto"
-                      onTouchStart={(e) => {
-                        const touch = e.touches[0];
-                        (e.currentTarget as any).startX = touch.clientX;
-                        (e.currentTarget as any).startTime = Date.now();
-                      }}
-                      onTouchEnd={(e) => {
-                        const touch = e.changedTouches[0];
-                        const startX = (e.currentTarget as any).startX;
-                        const startTime = (e.currentTarget as any).startTime;
-                        const diff = touch.clientX - startX;
-                        const timeDiff = Date.now() - startTime;
-                        
-                        if (Math.abs(diff) > 50 && timeDiff < 300) {
-                          if (diff > 0) { // Right swipe - previous
-                            setPeekGalleryIndex(prev => Math.max(0, prev - 1));
-                          } else { // Left swipe - next
-                            setPeekGalleryIndex(prev => Math.min(post.gallery_data!.items.length - 1, prev + 1));
-                          }
-                        }
-                        handleTouchEnd();
-                      }}
-                    >
-                      <img 
-                        src={post.media_metadata[post.gallery_data.items[peekGalleryIndex].media_id]?.s?.u?.replace(/&amp;/g, '&') || ''} 
-                        alt="" 
-                        className="w-full h-full object-contain"
-                        referrerPolicy="no-referrer"
-                      />
-                      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 bg-black/50 px-3 py-1.5 rounded-full text-white text-xs font-medium">
-                        {peekGalleryIndex + 1} / {post.gallery_data.items.length}
-                      </div>
-                    </div>
-                  );
-                }
+  return (
+    <div className="w-full h-full flex flex-col items-center justify-center pointer-events-auto">
+      <M3ExpressiveCarousel
+        items={post.gallery_data.items}
+        mediaMetadata={post.media_metadata}
+        title={post.title}
+        onMediaClick={() => handleTouchEnd()} // dismiss peek on tap
+      />
+    </div>
+  );
+}
                 
                 if (post.post_hint === 'image' || post.url?.match(/\.(jpg|jpeg|png)$/i)) {
                   return (

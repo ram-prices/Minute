@@ -450,7 +450,7 @@ export default function App() {
           setIsLoggedIn(true);
           setCurrentUsername(profile.name);
           setSubreddit('home');
-          loadPosts('home');
+          loadPosts('home', postSort);
           setShowSettings(false);
           const { getAccounts } = await import('./services/reddit');
           setAccounts(getAccounts());
@@ -459,7 +459,7 @@ export default function App() {
         }
       }
     }
-  }, [redditClientId, loadPosts]);
+  }, [redditClientId, loadPosts, postSort]);
 
   useEffect(() => {
     window.addEventListener('message', handleMessage);
@@ -505,7 +505,7 @@ export default function App() {
     setIsLoggedIn(false);
     setCurrentUsername('');
     setSubreddit('all');
-    loadPosts('all');
+    loadPosts('all', postSort);
     setShowSettings(false);
   };
 
@@ -515,7 +515,7 @@ export default function App() {
       setIsLoggedIn(true);
       setCurrentUsername(username);
       setSubreddit('home');
-      loadPosts('home');
+      loadPosts('home', postSort);
       setShowSettings(false);
     }
   };
@@ -528,7 +528,7 @@ export default function App() {
       setIsLoggedIn(false);
       setCurrentUsername('');
       setSubreddit('all');
-      loadPosts('all');
+      loadPosts('all', postSort);
     }
   };
 

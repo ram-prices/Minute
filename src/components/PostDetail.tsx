@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import M3ExpressiveCarousel from './M3ExpressiveCarousel';
 import React, { useEffect, useState, useRef } from 'react';
 import { RedditPost, RedditComment, fetchPostDetails, getStreamableId, getTwitterId, getBlueskyId } from '../services/reddit';
 import { X, ArrowLeft, MessageSquare, ArrowUp, Clock, User, MoreVertical, Trash2, Twitter, MessageCircle, Globe, Link, Camera, RefreshCw, ChevronDown } from 'lucide-react';
@@ -468,7 +469,7 @@ export default function PostDetail({
           </div>
 
           {/* Media Section - Below title, rounded corners */}
-          <div className="w-full rounded-2xl overflow-hidden bg-bg-highest">
+          <div className={`w-full ${post.is_gallery ? '' : 'rounded-2xl overflow-hidden bg-bg-highest'}`}>
             {post.is_video && post.media?.reddit_video && (
               <div className="w-full flex justify-center bg-black">
                 <VideoPlayer 
@@ -508,34 +509,13 @@ export default function PostDetail({
             )}
 
             {post.is_gallery && post.gallery_data?.items && post.media_metadata && (
-              <div className="w-full overflow-x-auto flex gap-3 px-4 snap-x snap-mandatory hide-scrollbar py-2">
-                {post.gallery_data.items.map((item, index) => {
-                  const media = post.media_metadata?.[item.media_id];
-                  if (!media?.s?.u) return null;
-                  const imageUrl = media.s.u.replace(/&amp;/g, '&');
-                  return (
-                    <div 
-                      key={item.media_id} 
-                      className="w-[85%] md:w-[60%] h-[50vh] shrink-0 snap-center rounded-3xl overflow-hidden bg-bg-tertiary flex items-center justify-center relative cursor-pointer active:scale-[0.98] transition-transform"
-                      onClick={() => onMediaClick?.(post, index)}
-                    >
-                      <img 
-                        src={imageUrl} 
-                        alt={post.title} 
-                        className="w-full h-full object-contain"
-                        referrerPolicy="no-referrer"
-                        onError={(e) => {
-                          e.currentTarget.style.display = 'none';
-                        }}
-                      />
-                      <div className="absolute top-3 right-3 bg-black/50 backdrop-blur-md text-white text-xs font-bold px-2.5 py-1 rounded-full pointer-events-none">
-                        {index + 1} / {post.gallery_data.items.length}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+  <M3ExpressiveCarousel
+    items={post.gallery_data.items}
+    mediaMetadata={post.media_metadata}
+    title={post.title}
+    onMediaClick={(index) => onMediaClick?.(post, index)}
+  />
+)}
 
             {(() => {
               const gif = getGifUrl(post);
@@ -631,7 +611,7 @@ export default function PostDetail({
           </div>
 
           {post.selftext && (
-            <div className="text-sm text-text-primary leading-relaxed bg-bg-tertiary p-4 md:p-6 rounded-2xl prose dark:prose-invert prose-sm max-w-none break-anywhere mt-2">
+            <div className="text-sm text-text-primary leading-snug bg-bg-tertiary p-4 md:p-6 rounded-2xl prose dark:prose-invert prose-sm max-w-none break-anywhere mt-2 prose-p:leading-snug prose-headings:leading-snug prose-li:leading-snug prose-p:my-1.5 prose-headings:my-2 prose-ul:my-1.5">
               <RedditMarkdown content={post.selftext} metadata={post.media_metadata} />
             </div>
           )}
@@ -904,16 +884,30 @@ function CommentItem({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [localReplies, setLocalReplies] = useState<RedditComment[]>([]);
   const [showMenu, setShowMenu] = useState(false);
+  const [showActions, setShowActions] = useState(false);
   const lastTapRef = useRef(0);
+  const singleTapTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  const handleDoubleTap = () => {
+  const handleTap = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('a')) return;
     const now = Date.now();
+    
     if (now - lastTapRef.current < 300) {
+      // Double tap
+      if (singleTapTimeoutRef.current) {
+        clearTimeout(singleTapTimeoutRef.current);
+        singleTapTimeoutRef.current = null;
+      }
       setShowReply(!showReply);
       lastTapRef.current = 0;
     } else {
+      // Single tap
       lastTapRef.current = now;
+      singleTapTimeoutRef.current = setTimeout(() => {
+        setShowActions(prev => !prev);
+        singleTapTimeoutRef.current = null;
+      }, 300);
     }
   };
 
@@ -924,7 +918,12 @@ function CommentItem({
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      if (singleTapTimeoutRef.current) {
+        clearTimeout(singleTapTimeoutRef.current);
+      }
+    };
   }, []);
 
   if (!comment.author || !comment.body) return null;
@@ -1017,210 +1016,205 @@ function CommentItem({
     }
   };
 
-  const getBgColor = () => {
-    const level = Math.min(depth, 6);
-    if (useMasterColor || level === 0) {
-      switch (level) {
-        case 0: return 'bg-level-0-master';
-        case 1: return 'bg-level-1-master';
-        case 2: return 'bg-level-2-master';
-        case 3: return 'bg-level-3-master';
-        case 4: return 'bg-level-4-master';
-        case 5: return 'bg-level-5-master';
-        case 6: return 'bg-level-6-master';
-        default: return 'bg-level-0-master';
+  const getThreadLineColorClass = (level: number, isBorder = false) => {
+    const l = Math.min(level, 6);
+    if (isBorder) {
+      switch (l) {
+        case 0: return 'border-stone-300 dark:border-stone-600';
+        case 1: return 'border-zinc-300 dark:border-zinc-600';
+        case 2: return 'border-neutral-300 dark:border-neutral-600';
+        case 3: return 'border-slate-300 dark:border-slate-600';
+        case 4: return 'border-gray-300 dark:border-gray-600';
+        case 5: return 'border-stone-400 dark:border-stone-700';
+        case 6: return 'border-zinc-400 dark:border-zinc-700';
+        default: return 'border-stone-300 dark:border-stone-600';
       }
     } else {
-      switch (level) {
-        case 0: return 'bg-level-0-master'; // Fallback to master for level 0
-        case 1: return 'bg-level-1-alt';
-        case 2: return 'bg-level-2-alt';
-        case 3: return 'bg-level-3-alt';
-        case 4: return 'bg-level-4-alt';
-        case 5: return 'bg-level-5-alt';
-        case 6: return 'bg-level-6-alt';
-        default: return 'bg-level-0-master';
-      }
-    }
-  };
-
-  const getButtonBgColor = () => {
-    const level = Math.min(depth, 6);
-    if (useMasterColor || level === 0) {
-      switch (level) {
-        case 0: return 'var(--color-level-0-master-button)';
-        case 1: return 'var(--color-level-1-master-button)';
-        case 2: return 'var(--color-level-2-master-button)';
-        case 3: return 'var(--color-level-3-master-button)';
-        case 4: return 'var(--color-level-4-master-button)';
-        case 5: return 'var(--color-level-5-master-button)';
-        case 6: return 'var(--color-level-6-master-button)';
-        default: return 'var(--color-level-0-master-button)';
-      }
-    } else {
-      switch (level) {
-        case 0: return 'var(--color-level-0-master-button)';
-        case 1: return 'var(--color-level-1-alt-button)';
-        case 2: return 'var(--color-level-2-alt-button)';
-        case 3: return 'var(--color-level-3-alt-button)';
-        case 4: return 'var(--color-level-4-alt-button)';
-        case 5: return 'var(--color-level-5-alt-button)';
-        case 6: return 'var(--color-level-6-alt-button)';
-        default: return 'var(--color-level-0-master-button)';
+      switch (l) {
+        case 0: return 'bg-stone-300 dark:bg-stone-600';
+        case 1: return 'bg-zinc-300 dark:bg-zinc-600';
+        case 2: return 'bg-neutral-300 dark:bg-neutral-600';
+        case 3: return 'bg-slate-300 dark:bg-slate-600';
+        case 4: return 'bg-gray-300 dark:bg-gray-600';
+        case 5: return 'bg-stone-400 dark:bg-stone-700';
+        case 6: return 'bg-zinc-400 dark:bg-zinc-700';
+        default: return 'bg-stone-300 dark:bg-stone-600';
       }
     }
   };
 
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col relative">
       <div 
         id={`comment-${comment.id}`}
-        onClick={handleDoubleTap}
-        className={`flex flex-col gap-2 p-4 ${getBgColor()} ${
-        ((depth === 0 || isIsolatedRoot) && isFirst) && (isLast && !rendersReplies) ? 'rounded-2xl' :
-        ((depth === 0 || isIsolatedRoot) && isFirst) ? 'rounded-l-2xl rounded-tr-2xl rounded-br-none' :
-        (isLast && !rendersReplies) ? 'rounded-l-2xl rounded-tr-none rounded-br-2xl' :
-        'rounded-l-2xl rounded-r-none'
-      }`}>
-        <div className="flex items-center gap-1.5 text-xs text-text-secondary overflow-hidden whitespace-nowrap">
+        onClick={handleTap}
+        className="flex gap-2.5 pt-3 relative z-10">
+        
+        {/* Left Column: Avatar & Line */}
+        <div className="flex flex-col items-center shrink-0 w-6">
           <button 
             onClick={() => onUserClick?.(comment.author)}
-            className="relative flex items-center gap-1.5 hover:underline overflow-hidden shrink-0"
+            className="w-6 h-6 rounded-full bg-bg-tertiary flex items-center justify-center overflow-hidden shrink-0 relative z-10"
           >
-            <div className="w-5 h-5 rounded-full bg-bg-tertiary flex items-center justify-center overflow-hidden shrink-0">
-              <UserAvatar username={comment.author} size={12} iconClassName="text-text-secondary" />
-            </div>
-            <span className="font-bold text-text-primary shrink-0">u/{comment.author}</span>
-            <Ripple />
+            <UserAvatar username={comment.author} size={24} iconClassName="text-text-secondary" />
           </button>
-          <Flair 
-            text={comment.author_flair_text} 
-            richtext={comment.author_flair_richtext}
-            className="shrink min-w-0"
-          />
-          <span className="opacity-50 shrink-0">•</span>
-          <span className="opacity-75 shrink-0">{formatTimestamp(comment.created_utc)}</span>
+          {/* Vertical line for the comment body itself */}
+          {rendersReplies && (
+            <div 
+              className={`w-[2px] flex-1 mt-1.5 rounded-full ${getThreadLineColorClass(depth, false)}`} 
+            />
+          )}
         </div>
-        <div className="text-sm text-text-primary leading-relaxed prose dark:prose-invert prose-sm max-w-none break-anywhere">
-          <RedditMarkdown content={comment.body} metadata={comment.media_metadata} />
-        </div>
-        <div className="flex items-center gap-4 text-xs font-medium text-text-secondary mt-1">
-          <div className="flex items-center h-8">
-            <motion.button 
-              initial={false}
-              onClick={() => handleVote(1)}
-              animate={{
-                width: 32,
-                borderRadius: voteDir === 1 ? "16px 0px 0px 16px" : 
-                             voteDir === -1 ? "16px 16px 16px 16px" : "16px 0px 0px 16px",
-                marginRight: voteDir === -1 ? 6 : 0,
-                backgroundColor: voteDir === 1 ? "var(--md-sys-color-primary)" : getButtonBgColor(),
-                color: voteDir === 1 ? "var(--md-sys-color-on-primary)" : "var(--md-sys-color-on-surface-variant)"
-              }}
-              whileHover={voteDir === 0 ? { backgroundColor: "var(--md-sys-color-surface-container-high)" } : {}}
-              transition={{ 
-                duration: 0.3
-              }}
-              className="relative flex items-center justify-center h-full z-10 overflow-hidden"
-            >
-              <ArrowUp size={14} strokeWidth={2.5} />
-              <Ripple />
-            </motion.button>
-            <motion.div 
-              initial={false}
-              animate={{
-                borderRadius: voteDir === 1 ? "0px 16px 16px 0px" : 
-                             voteDir === -1 ? "16px 0px 0px 16px" : "0px 0px 0px 0px",
-                marginLeft: voteDir === 1 ? -1 : 0,
-                marginRight: voteDir === -1 ? -1 : 0,
-                paddingLeft: voteDir === 1 ? 4 : voteDir === -1 ? 12 : 6,
-                paddingRight: voteDir === 1 ? 12 : voteDir === -1 ? 4 : 6,
-                backgroundColor: voteDir === 1 ? "var(--md-sys-color-primary)" : 
-                                 voteDir === -1 ? "var(--md-sys-color-secondary-container)" : 
-                                 getButtonBgColor(),
-                color: voteDir === 1 ? "var(--md-sys-color-on-primary)" : 
-                       voteDir === -1 ? "var(--md-sys-color-on-secondary-container)" : 
-                       "var(--md-sys-color-on-surface)"
-              }}
-              transition={{ 
-                duration: 0.3
-              }}
-              className="flex items-center justify-center font-bold text-xs h-full"
-            >
-              {localScore > 1000 ? `${(localScore / 1000).toFixed(1)}k` : localScore}
-            </motion.div>
-            <motion.button 
-              initial={false}
-              onClick={() => handleVote(-1)}
-              animate={{
-                width: 32,
-                borderRadius: voteDir === -1 ? "0px 16px 16px 0px" : 
-                             voteDir === 1 ? "16px 16px 16px 16px" : "0px 16px 16px 0px",
-                marginLeft: voteDir === 1 ? 6 : 0,
-                backgroundColor: voteDir === -1 ? "var(--md-sys-color-secondary-container)" : getButtonBgColor(),
-                color: voteDir === -1 ? "var(--md-sys-color-on-secondary-container)" : "var(--md-sys-color-on-surface-variant)"
-              }}
-              whileHover={voteDir === 0 ? { backgroundColor: "var(--md-sys-color-surface-container-high)" } : {}}
-              transition={{ 
-                duration: 0.3
-              }}
-              className="relative flex items-center justify-center h-full z-10 overflow-hidden"
-            >
-              <ArrowUp size={14} strokeWidth={2.5} className="rotate-180" />
-              <Ripple />
-            </motion.button>
-          </div>
-          
-          <div className="relative ml-auto screenshot-exclude" ref={menuRef}>
-            <button 
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowMenu(!showMenu);
-              }}
-              className="relative w-8 h-8 flex items-center justify-center text-text-secondary hover:text-text-primary hover:bg-bg-tertiary rounded-full transition-all active:scale-90 overflow-hidden"
-            >
-              <MoreVertical size={18} />
-              <Ripple />
-            </button>
+
+        {/* Right Column: Content */}
+        <div className="flex flex-col flex-1 min-w-0 pb-1 relative">
+          <div className="flex flex-col relative z-10 bg-bg-primary">
+            <div className="flex items-center gap-1.5 text-xs text-text-secondary overflow-hidden whitespace-nowrap mb-1">
+              <button 
+                onClick={(e) => { e.stopPropagation(); onUserClick?.(comment.author); }}
+                className="font-bold text-text-primary hover:underline shrink-0"
+              >
+                u/{comment.author}
+              </button>
+              <Flair 
+                text={comment.author_flair_text} 
+                richtext={comment.author_flair_richtext}
+                className="shrink min-w-0"
+              />
+              <span className="opacity-50 shrink-0">•</span>
+              <span className={`font-medium shrink-0 flex items-center gap-0.5 ${voteDir === 1 ? 'text-primary' : voteDir === -1 ? 'text-error' : 'text-text-primary'}`}>
+                <ArrowUp size={12} strokeWidth={3} className={localScore < 0 || voteDir === -1 ? 'rotate-180' : ''} />
+                {comment.score_hidden ? "?" : (localScore > 1000 ? `${(localScore / 1000).toFixed(1)}k` : localScore)}
+              </span>
+              <span className="opacity-50 shrink-0">•</span>
+              <span className="opacity-75 shrink-0">{formatTimestamp(comment.created_utc)}</span>
+            </div>
+            <div className="text-sm text-text-primary leading-snug prose dark:prose-invert prose-sm max-w-none break-anywhere prose-p:leading-snug prose-headings:leading-snug prose-li:leading-snug prose-p:my-1.5 prose-headings:my-2 prose-ul:my-1.5">
+              <RedditMarkdown content={comment.body} metadata={comment.media_metadata} />
+            </div>
             
             <AnimatePresence>
-              {showMenu && (
+              {showActions && (
                 <motion.div 
-                  initial={{ opacity: 0, scale: 0.95, y: -10 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                  className="absolute right-0 bottom-full mb-2 w-48 bg-bg-tertiary rounded-2xl z-50 overflow-hidden shadow-xl border border-white/5"
-                  onClick={(e) => e.stopPropagation()}
+                  initial={{ opacity: 0, height: 0, marginTop: 0 }}
+                  animate={{ opacity: 1, height: 'auto', marginTop: 4 }}
+                  exit={{ opacity: 0, height: 0, marginTop: 0 }}
+                  className="flex items-center gap-4 text-xs font-medium text-text-secondary overflow-hidden"
                 >
-                  <button 
-                    onClick={() => {
-                      const permalink = `https://reddit.com${comment.permalink}`;
-                      navigator.clipboard.writeText(permalink);
-                      setShowMenu(false);
-                    }}
-                    className="relative w-full px-4 py-3 text-left text-sm text-text-primary hover:bg-hover-bg flex items-center gap-2 overflow-hidden"
-                  >
-                    <Link size={16} className="text-text-secondary" />
-                    Copy Permalink
-                    <Ripple />
-                  </button>
-                  <button 
-                    disabled={commentHasMedia}
-                    onClick={() => {
-                      handleScreenshot(`comment-${comment.id}`);
-                      setShowMenu(false);
-                    }}
-                    className={`relative w-full px-4 py-3 text-left text-sm flex items-center gap-2 overflow-hidden ${commentHasMedia ? 'text-text-secondary opacity-50 cursor-not-allowed' : 'text-text-primary hover:bg-hover-bg'}`}
-                  >
-                    <Camera size={16} className="text-text-secondary" />
-                    Copy Screenshot
-                    {!commentHasMedia && <Ripple />}
-                  </button>
+                  <div className="flex items-center h-8">
+                    <motion.button 
+                      initial={false}
+                      onClick={(e) => { e.stopPropagation(); handleVote(1); }}
+                      animate={{
+                        width: 32,
+                        borderRadius: voteDir === 1 ? "16px 0px 0px 16px" : 
+                                     voteDir === -1 ? "16px 16px 16px 16px" : "16px 0px 0px 16px",
+                        marginRight: voteDir === -1 ? 6 : 0,
+                        backgroundColor: voteDir === 1 ? "var(--md-sys-color-primary)" : "var(--md-sys-color-surface-container-high)",
+                        color: voteDir === 1 ? "var(--md-sys-color-on-primary)" : "var(--md-sys-color-on-surface-variant)"
+                      }}
+                      whileHover={voteDir === 0 ? { backgroundColor: "var(--md-sys-color-surface-container-highest)" } : {}}
+                      transition={{ duration: 0.3 }}
+                      className="relative flex items-center justify-center h-full z-10 overflow-hidden"
+                    >
+                      <ArrowUp size={14} strokeWidth={2.5} />
+                      <Ripple />
+                    </motion.button>
+                    <motion.div 
+                      initial={false}
+                      animate={{
+                        borderRadius: voteDir === 1 ? "0px 16px 16px 0px" : 
+                                     voteDir === -1 ? "16px 0px 0px 16px" : "0px 0px 0px 0px",
+                        marginLeft: voteDir === 1 ? -1 : 0,
+                        marginRight: voteDir === -1 ? -1 : 0,
+                        paddingLeft: voteDir === 1 ? 4 : voteDir === -1 ? 12 : 6,
+                        paddingRight: voteDir === 1 ? 12 : voteDir === -1 ? 4 : 6,
+                        backgroundColor: voteDir === 1 ? "var(--md-sys-color-primary)" : 
+                                         voteDir === -1 ? "var(--md-sys-color-secondary-container)" : 
+                                         "var(--md-sys-color-surface-container-high)",
+                        color: voteDir === 1 ? "var(--md-sys-color-on-primary)" : 
+                               voteDir === -1 ? "var(--md-sys-color-on-secondary-container)" : 
+                               "var(--md-sys-color-on-surface)"
+                      }}
+                      transition={{ duration: 0.3 }}
+                      className="flex items-center justify-center font-bold text-xs h-full"
+                    >
+                      {comment.score_hidden ? "?" : (localScore > 1000 ? `${(localScore / 1000).toFixed(1)}k` : localScore)}
+                    </motion.div>
+                    <motion.button 
+                      initial={false}
+                      onClick={(e) => { e.stopPropagation(); handleVote(-1); }}
+                      animate={{
+                        width: 32,
+                        borderRadius: voteDir === -1 ? "0px 16px 16px 0px" : 
+                                     voteDir === 1 ? "16px 16px 16px 16px" : "0px 16px 16px 0px",
+                        marginLeft: voteDir === 1 ? 6 : 0,
+                        backgroundColor: voteDir === -1 ? "var(--md-sys-color-secondary-container)" : "var(--md-sys-color-surface-container-high)",
+                        color: voteDir === -1 ? "var(--md-sys-color-on-secondary-container)" : "var(--md-sys-color-on-surface-variant)"
+                      }}
+                      whileHover={voteDir === 0 ? { backgroundColor: "var(--md-sys-color-surface-container-highest)" } : {}}
+                      transition={{ duration: 0.3 }}
+                      className="relative flex items-center justify-center h-full z-10 overflow-hidden"
+                    >
+                      <ArrowUp size={14} strokeWidth={2.5} className="rotate-180" />
+                      <Ripple />
+                    </motion.button>
+                  </div>
+                  
+                  <div className="relative ml-auto screenshot-exclude" ref={menuRef}>
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowMenu(!showMenu);
+                      }}
+                      className="relative w-8 h-8 flex items-center justify-center text-text-secondary hover:text-text-primary hover:bg-bg-tertiary rounded-full transition-all active:scale-90 overflow-hidden"
+                    >
+                      <MoreVertical size={18} />
+                      <Ripple />
+                    </button>
+                    
+                    <AnimatePresence>
+                      {showMenu && (
+                        <motion.div 
+                          initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                          animate={{ opacity: 1, scale: 1, y: 0 }}
+                          exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                          className="absolute right-0 bottom-full mb-2 w-48 bg-bg-tertiary rounded-2xl z-50 overflow-hidden shadow-xl border border-white/5"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const permalink = `https://reddit.com${comment.permalink}`;
+                              navigator.clipboard.writeText(permalink);
+                              setShowMenu(false);
+                            }}
+                            className="relative w-full px-4 py-3 text-left text-sm text-text-primary hover:bg-hover-bg flex items-center gap-2 overflow-hidden"
+                          >
+                            <Link size={16} className="text-text-secondary" />
+                            Copy Permalink
+                            <Ripple />
+                          </button>
+                          <button 
+                            disabled={commentHasMedia}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleScreenshot(`comment-${comment.id}`);
+                              setShowMenu(false);
+                            }}
+                            className={`relative w-full px-4 py-3 text-left text-sm flex items-center gap-2 overflow-hidden ${commentHasMedia ? 'text-text-secondary opacity-50 cursor-not-allowed' : 'text-text-primary hover:bg-hover-bg'}`}
+                          >
+                            <Camera size={16} className="text-text-secondary" />
+                            Copy Screenshot
+                            {!commentHasMedia && <Ripple />}
+                          </button>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
                 </motion.div>
               )}
             </AnimatePresence>
-          </div>
-        </div>
 
         {showReply && (
           <div className="mt-2 flex flex-col gap-3">
@@ -1251,37 +1245,56 @@ function CommentItem({
         )}
 
         {hasReplies && depth >= 6 && !isIsolatedRoot && (
-          <div className="mt-4 pt-4 pb-1 relative flex flex-col items-center">
-            <div className="absolute top-0 left-2 right-2 h-[1px] bg-black/10 dark:bg-white/10 rounded-full" />
+          <div className="mt-2 mb-2 relative flex items-center">
             <button 
               onClick={() => onIsolate?.(comment)}
-              style={{ backgroundColor: getButtonBgColor() }}
-              className="relative w-full sm:w-auto min-w-[220px] h-8 px-6 text-xs font-bold text-text-primary hover:brightness-95 dark:hover:brightness-110 transition-all flex items-center justify-center gap-2 overflow-hidden rounded-full active:scale-95"
+              className="relative h-8 px-4 text-xs font-bold text-text-primary hover:bg-hover-bg transition-all flex items-center justify-center gap-2 rounded-full active:scale-95 border border-border-color"
             >
-              <MessageSquare size={16} className="opacity-70" />
-              <span>View {allReplies.length} {allReplies.length === 1 ? 'reply' : 'replies'}</span>
+              <MessageSquare size={14} className="opacity-70" />
+              <span>{allReplies.length} more {allReplies.length === 1 ? 'reply' : 'replies'}</span>
               <Ripple />
             </button>
           </div>
         )}
+          </div>
+        </div>
       </div>
 
       {rendersReplies && (
-        <div className="flex flex-col gap-0 ml-3 md:ml-5 pl-3 md:pl-4 border-l-2 border-black/10 dark:border-white/20">
-          {allReplies.map((reply, index) => (
-            <CommentItem 
-              key={reply.id} 
-              comment={reply} 
-              depth={isIsolatedRoot ? 1 : depth + 1} 
-              onVote={onVote} 
-              onComment={onComment}
-              onUserClick={onUserClick}
-              isFirst={index === 0}
-              isLast={isLast && index === allReplies.length - 1}
-              useMasterColor={index % 2 === 0}
-              onIsolate={onIsolate}
-            />
-          ))}
+        <div className="flex flex-col gap-0 relative">
+          {allReplies.map((reply, index) => {
+            const isLastReply = index === allReplies.length - 1;
+            const parentLineBg = getThreadLineColorClass(depth, false);
+            const parentLineBorder = getThreadLineColorClass(depth, true);
+            
+            return (
+              <div key={reply.id} className="relative">
+                {/* The curved line connecting to this comment */}
+                <div 
+                  className={`absolute top-0 left-[11px] w-[16px] h-[25px] border-l-2 border-b-2 rounded-bl-xl z-0 ${parentLineBorder}`} 
+                />
+                {/* The vertical line continuing to the next comment, if not the last */}
+                {!isLastReply && (
+                  <div 
+                    className={`absolute top-0 bottom-0 left-[11px] w-[2px] z-0 ${parentLineBg}`} 
+                  />
+                )}
+                <div className="ml-[27px] relative z-10">
+                  <CommentItem 
+                    comment={reply} 
+                    depth={isIsolatedRoot ? 1 : depth + 1} 
+                    onVote={onVote} 
+                    onComment={onComment}
+                    onUserClick={onUserClick}
+                    isFirst={index === 0}
+                    isLast={isLast && index === allReplies.length - 1}
+                    useMasterColor={index % 2 === 0}
+                    onIsolate={onIsolate}
+                  />
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

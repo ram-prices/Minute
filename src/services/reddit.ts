@@ -70,6 +70,7 @@ export interface RedditComment {
   body: string;
   body_html?: string;
   score: number;
+  score_hidden?: boolean;
   created_utc: number;
   permalink: string;
   author_flair_text?: string;
