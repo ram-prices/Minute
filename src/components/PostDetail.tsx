@@ -5,7 +5,7 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { RedditPost, RedditComment, fetchPostDetails, getStreamableId, getTwitterId, getBlueskyId } from '../services/reddit';
-import { X, ArrowLeft, MessageSquare, ArrowUp, Clock, User, MoreVertical, Trash2, Twitter, MessageCircle, Globe, Link, Camera } from 'lucide-react';
+import { X, ArrowLeft, MessageSquare, ArrowUp, Clock, User, MoreVertical, Trash2, Twitter, MessageCircle, Globe, Link, Camera, RefreshCw, ChevronDown } from 'lucide-react';
 import { UserAvatar } from './UserAvatar';
 import Markdown from 'react-markdown';
 import { motion, AnimatePresence } from 'motion/react';
@@ -95,6 +95,20 @@ export default function PostDetail({
   const scrollPositions = React.useRef<Record<string, number>>({});
   const currentScrollRef = React.useRef<HTMLDivElement | null>(null);
   const [commentStack, setCommentStack] = useState<RedditComment[]>([]);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [commentSort, setCommentSort] = useState('confidence');
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      const { comments } = await fetchPostDetails(post.permalink, true, commentSort);
+      setComments(comments);
+    } catch (error) {
+      console.error('Failed to refresh comments', error);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   const handleScrollRef = React.useCallback((node: HTMLDivElement | null) => {
     currentScrollRef.current = node;
@@ -182,8 +196,9 @@ export default function PostDetail({
 
   useEffect(() => {
     async function loadComments() {
+      setLoading(true);
       try {
-        const { comments } = await fetchPostDetails(post.permalink);
+        const { comments } = await fetchPostDetails(post.permalink, false, commentSort);
         setComments(comments);
       } catch (error) {
         console.error('Failed to load comments', error);
@@ -192,7 +207,7 @@ export default function PostDetail({
       }
     }
     loadComments();
-  }, [post.permalink]);
+  }, [post.permalink, commentSort]);
 
   const handleVote = async (dir: number) => {
     if (!onVote) return;
@@ -329,6 +344,30 @@ export default function PostDetail({
               <Ripple />
             </button>
           )}
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="relative group">
+            <select
+              value={commentSort}
+              onChange={(e) => setCommentSort(e.target.value)}
+              className="bg-primary/10 text-primary font-bold text-sm rounded-full pl-4 pr-10 py-2 focus:outline-none focus:ring-2 focus:ring-primary appearance-none cursor-pointer transition-colors hover:bg-primary/20"
+            >
+              <option value="confidence">Best</option>
+              <option value="top">Top</option>
+              <option value="new">New</option>
+              <option value="controversial">Controversial</option>
+              <option value="old">Old</option>
+              <option value="qa">Q&A</option>
+            </select>
+            <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-primary pointer-events-none transition-transform group-hover:translate-y-[-40%]" />
+          </div>
+          <button 
+            onClick={handleRefresh}
+            className={`relative p-2 text-text-secondary hover:text-text-primary hover:bg-hover-bg rounded-full transition-all touch-manipulation active:scale-90 overflow-hidden ${isRefreshing ? 'animate-spin text-primary' : ''}`}
+          >
+            <RefreshCw size={24} />
+            <Ripple />
+          </button>
         </div>
       </motion.header>
 
@@ -469,23 +508,30 @@ export default function PostDetail({
             )}
 
             {post.is_gallery && post.gallery_data?.items && post.media_metadata && (
-              <div className="w-full overflow-x-auto flex snap-x snap-mandatory bg-black">
+              <div className="w-full overflow-x-auto flex gap-3 px-4 snap-x snap-mandatory hide-scrollbar py-2">
                 {post.gallery_data.items.map((item, index) => {
                   const media = post.media_metadata?.[item.media_id];
                   if (!media?.s?.u) return null;
                   const imageUrl = media.s.u.replace(/&amp;/g, '&');
                   return (
-                    <img 
-                      key={item.media_id}
-                      src={imageUrl} 
-                      alt={post.title} 
-                      className="w-full h-auto max-h-[70vh] object-contain shrink-0 snap-center cursor-pointer"
-                      referrerPolicy="no-referrer"
+                    <div 
+                      key={item.media_id} 
+                      className="w-[85%] md:w-[60%] h-[50vh] shrink-0 snap-center rounded-3xl overflow-hidden bg-bg-tertiary flex items-center justify-center relative cursor-pointer active:scale-[0.98] transition-transform"
                       onClick={() => onMediaClick?.(post, index)}
-                      onError={(e) => {
-                        e.currentTarget.style.display = 'none';
-                      }}
-                    />
+                    >
+                      <img 
+                        src={imageUrl} 
+                        alt={post.title} 
+                        className="w-full h-full object-contain"
+                        referrerPolicy="no-referrer"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                        }}
+                      />
+                      <div className="absolute top-3 right-3 bg-black/50 backdrop-blur-md text-white text-xs font-bold px-2.5 py-1 rounded-full pointer-events-none">
+                        {index + 1} / {post.gallery_data.items.length}
+                      </div>
+                    </div>
                   );
                 })}
               </div>
@@ -495,7 +541,10 @@ export default function PostDetail({
               const gif = getGifUrl(post);
               if (gif && !post.is_video) { // if is_video is true, it's handled above
                 return (
-                  <div className="w-full no-callout bg-black">
+                  <div 
+                    className="w-full no-callout bg-black cursor-pointer"
+                    onClick={() => onMediaClick?.(post, 0)}
+                  >
                     {gif.type === 'mp4' ? (
                       <video 
                         src={getProxiedMediaUrl(gif.url)} 
@@ -525,11 +574,14 @@ export default function PostDetail({
               
               if (!post.is_video && !post.is_gallery && post.url && (post.post_hint === 'image' || post.url.match(/\.(jpg|jpeg|png)$/i))) {
                 return (
-                  <div className="w-full no-callout bg-black">
+                  <div 
+                    className="w-full no-callout bg-black cursor-pointer"
+                    onClick={() => onMediaClick?.(post, 0)}
+                  >
                     <img 
                       src={post.url} 
                       alt={post.title} 
-                      className="w-full h-auto no-callout pointer-events-none"
+                      className="w-full h-auto max-h-[70vh] object-contain no-callout pointer-events-none"
                       referrerPolicy="no-referrer"
                       onContextMenu={(e) => e.preventDefault()}
                       draggable="false"

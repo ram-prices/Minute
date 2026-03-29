@@ -1,11 +1,7 @@
 import fetch from 'node-fetch';
 
 async function run() {
-  const res = await fetch('https://www.reddit.com/r/funny/comments/1908x2w.json?limit=10', {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
-    }
-  });
+  const res = await fetch('https://www.reddit.com/r/funny/comments/1908x2w.json?limit=10');
   const json = await res.json();
   const comments = json[1].data.children;
   for (const c of comments) {

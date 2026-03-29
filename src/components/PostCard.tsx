@@ -75,6 +75,7 @@ interface PostCardProps {
   onMediaClick?: (post: RedditPost, index?: number) => void;
   onFilterSubreddit?: (subreddit: string) => void;
   onFilterUser?: (username: string) => void;
+  hideSubredditInfo?: boolean;
 }
 
 export default function PostCard({ 
@@ -85,7 +86,8 @@ export default function PostCard({
   onUserClick, 
   onMediaClick,
   onFilterSubreddit,
-  onFilterUser
+  onFilterUser,
+  hideSubredditInfo
 }: PostCardProps) {
   const [voteDir, setVoteDir] = useState(post.likes === true ? 1 : post.likes === false ? -1 : 0);
   const [localScore, setLocalScore] = useState(post.score);
@@ -252,39 +254,45 @@ export default function PostCard({
       <Ripple />
       {/* Header */}
       <div className="flex items-center gap-2 mb-1 transition-opacity">
-        <button 
-          onClick={(e) => {
-            e.stopPropagation();
-            onSubredditClick?.(post.subreddit);
-          }}
-          className="relative w-6 h-6 rounded-full bg-bg-highest flex items-center justify-center text-[10px] font-bold text-text-secondary shrink-0 overflow-hidden no-callout transition-transform active:scale-95"
-        >
-          {post.sr_detail?.community_icon || post.sr_detail?.icon_img ? (
-            <img 
-              src={(post.sr_detail.community_icon || post.sr_detail.icon_img).split('?')[0]} 
-              alt="" 
-              className="w-full h-full object-cover no-callout pointer-events-none"
-              referrerPolicy="no-referrer"
-              onContextMenu={(e) => e.preventDefault()}
-              draggable="false"
-            />
-          ) : (
-            post.subreddit.charAt(0).toUpperCase()
-          )}
-          <Ripple />
-        </button>
-        <div className="flex items-center gap-x-1.5 text-xs text-text-secondary opacity-70 group-hover:opacity-100 transition-opacity overflow-hidden whitespace-nowrap">
+        {!hideSubredditInfo && (
           <button 
             onClick={(e) => {
               e.stopPropagation();
               onSubredditClick?.(post.subreddit);
             }}
-            className="relative font-medium hover:underline px-1 -mx-1 rounded-md overflow-hidden shrink-0"
+            className="relative w-6 h-6 rounded-full bg-bg-highest flex items-center justify-center text-[10px] font-bold text-text-secondary shrink-0 overflow-hidden no-callout transition-transform active:scale-95"
           >
-            r/{post.subreddit}
+            {post.sr_detail?.community_icon || post.sr_detail?.icon_img ? (
+              <img 
+                src={(post.sr_detail.community_icon || post.sr_detail.icon_img).split('?')[0]} 
+                alt="" 
+                className="w-full h-full object-cover no-callout pointer-events-none"
+                referrerPolicy="no-referrer"
+                onContextMenu={(e) => e.preventDefault()}
+                draggable="false"
+              />
+            ) : (
+              post.subreddit.charAt(0).toUpperCase()
+            )}
             <Ripple />
           </button>
-          <span className="opacity-50 shrink-0">•</span>
+        )}
+        <div className="flex items-center gap-x-1.5 text-xs text-text-secondary opacity-70 group-hover:opacity-100 transition-opacity overflow-hidden whitespace-nowrap">
+          {!hideSubredditInfo && (
+            <>
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSubredditClick?.(post.subreddit);
+                }}
+                className="relative font-medium hover:underline px-1 -mx-1 rounded-md overflow-hidden shrink-0"
+              >
+                r/{post.subreddit}
+                <Ripple />
+              </button>
+              <span className="opacity-50 shrink-0">•</span>
+            </>
+          )}
           <button 
             onClick={(e) => {
               e.stopPropagation();
@@ -539,13 +547,15 @@ export default function PostCard({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2, ease: "linear" }}
-            className="fixed inset-0 z-[1000] flex items-center justify-center pointer-events-none"
+            className="fixed inset-0 z-[1000] flex items-center justify-center pointer-events-none no-callout"
+            onContextMenu={(e) => e.preventDefault()}
           >
-            <div className="absolute inset-0 bg-black/95 backdrop-blur-xl" />
+            <div className="absolute inset-0 bg-black/95 backdrop-blur-xl no-callout" />
             <div 
-              className="relative w-full h-full flex items-center justify-center pointer-events-auto"
+              className="relative w-full h-full flex items-center justify-center pointer-events-auto no-callout"
               onTouchEnd={handleTouchEnd}
               onMouseUp={handleTouchEnd}
+              onContextMenu={(e) => e.preventDefault()}
             >
               {(() => {
                 const gif = getGifUrl(post);

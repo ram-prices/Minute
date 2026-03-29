@@ -9,7 +9,6 @@ export function getGifUrl(post: any): { type: 'hls' | 'mp4' | 'gif', url: string
   // Case 2: preview.images mp4 variant (GIFs Reddit converted)
   const preview = post.preview?.images?.[0];
   if (preview?.variants?.mp4?.source?.url) {
-    // Reddit HTML-encodes these URLs — must decode
     return { type: 'mp4', url: preview.variants.mp4.source.url.replaceAll('&amp;', '&') };
   }
   // Fallback: animated gif variant
@@ -39,16 +38,10 @@ export function getGifUrl(post: any): { type: 'hls' | 'mp4' | 'gif', url: string
   return null;
 }
 
+// No server-side proxy exists — return URLs directly.
+// Reddit media (preview.redd.it, i.redd.it, v.redd.it) loads fine
+// with referrerPolicy="no-referrer" directly from the browser.
 export function getProxiedMediaUrl(url: string): string {
   if (!url) return url;
-  const allowed = ['v.redd.it', 'i.redd.it', 'preview.redd.it', 'i.imgur.com', 'media.giphy.com', 'media.tenor.com', 'tenor.com', 'giphy.com'];
-  try {
-    const host = new URL(url).hostname;
-    if (allowed.some(d => host.endsWith(d))) {
-      return `/api/media-proxy?url=${encodeURIComponent(url)}`;
-    }
-  } catch (e) {
-    // Invalid URL
-  }
   return url;
 }

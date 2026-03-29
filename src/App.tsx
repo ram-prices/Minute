@@ -10,15 +10,17 @@ import PostDetail from './components/PostDetail';
 import VideoPlayer from './components/VideoPlayer';
 import UserProfile from './components/UserProfile';
 import { Ripple } from './components/Ripple';
-import { RedditPost, fetchSubreddit, setRedditAuth, getAuthUrl, fetchMySubreddits, getStreamableId, preloadPostDetails } from './services/reddit';
-import { Search, RefreshCw, Home, TrendingUp, Hash, Settings, X, Smartphone, Globe, LogIn, LogOut, Info, User, UserCircle, Trash2, ArrowLeft, Moon } from 'lucide-react';
+import { RedditPost, fetchSubreddit, fetchSubredditInfo, setRedditAuth, getAuthUrl, fetchMySubreddits, getStreamableId } from './services/reddit';
+import { Search, RefreshCw, Home, TrendingUp, Hash, Settings, X, Smartphone, Globe, LogIn, LogOut, Info, User, UserCircle, Trash2, ArrowLeft, Moon, ChevronDown } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ReactPlayer from 'react-player';
 import { SquigglyLoader } from './components/SquigglyLoader';
 import { getGifUrl, getProxiedMediaUrl } from './lib/media';
+import { decodeHtml } from './lib/decode';
 
 export default function App() {
-  const [view, setView] = useState<'feed' | 'settings' | 'profile'>('feed');
+  const [view, setView] = useState<'feed' | 'settings' | 'profile' | 'browse'>('feed');
+  const [postSort, setPostSort] = useState('hot');
   const [theme, setTheme] = useState<'system' | 'light' | 'dark'>(() => {
     return (localStorage.getItem('theme') as 'system' | 'light' | 'dark') || 'system';
   });
@@ -38,6 +40,7 @@ export default function App() {
     }
   }, [theme]);
   const [subreddit, setSubreddit] = useState(localStorage.getItem('reddit_access_token') ? 'home' : 'all');
+  const [subredditInfo, setSubredditInfo] = useState<any>(null);
   const [subredditHistory, setSubredditHistory] = useState<string[]>([]);
   const [selectedUser, setSelectedUser] = useState<string | null>(null);
   const [posts, setPosts] = useState<RedditPost[]>([]);
@@ -298,27 +301,21 @@ export default function App() {
     localStorage.setItem('reddit_filtered_users', JSON.stringify(filteredUsers));
   }, [filteredUsers]);
 
-  const loadPosts = useCallback(async (sub: string, append = false) => {
+  const loadPosts = useCallback(async (sub: string, sort: string, append = false) => {
     if (!append) {
       setLoading(true);
       afterRef.current = null;
+      if (sub !== 'home' && sub !== 'all' && sub !== 'popular') {
+        fetchSubredditInfo(sub).then(setSubredditInfo);
+      } else {
+        setSubredditInfo(null);
+      }
     }
     try {
-      const { posts: newPosts, after: newAfter } = await fetchSubreddit(sub, append ? afterRef.current || undefined : undefined);
+      const { posts: newPosts, after: newAfter } = await fetchSubreddit(sub, append ? afterRef.current || undefined : undefined, sort);
       setPosts(prev => append ? [...prev, ...newPosts] : newPosts);
       afterRef.current = newAfter;
       setAfter(newAfter); // Still keep state for UI if needed, but use ref for logic
-      
-      // Preload the top 5 posts for faster viewing, then the next 5
-      if (!append && newPosts.length > 0) {
-        (async () => {
-          const firstBatch = newPosts.slice(0, 5);
-          await Promise.all(firstBatch.map(post => post.permalink ? preloadPostDetails(post.permalink) : Promise.resolve()));
-          
-          const secondBatch = newPosts.slice(5, 10);
-          await Promise.all(secondBatch.map(post => post.permalink ? preloadPostDetails(post.permalink) : Promise.resolve()));
-        })();
-      }
     } catch (error) {
       console.error('Failed to load posts', error);
     } finally {
@@ -337,15 +334,15 @@ export default function App() {
   }, [isLoggedIn]);
 
   useEffect(() => {
-    loadPosts(subreddit);
-  }, [subreddit, loadPosts]);
+    loadPosts(subreddit, postSort);
+  }, [subreddit, postSort, loadPosts]);
 
   // Infinite Scroll Observer
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting && after && !loading && view === 'feed') {
-          loadPosts(subreddit, true);
+          loadPosts(subreddit, postSort, true);
         }
       },
       { threshold: 0.1, rootMargin: '200px' }
@@ -356,7 +353,7 @@ export default function App() {
     }
 
     return () => observer.disconnect();
-  }, [after, loading, subreddit, loadPosts, view]);
+  }, [after, loading, subreddit, postSort, loadPosts, view]);
 
   useEffect(() => {
     loadMySubreddits();
@@ -387,7 +384,7 @@ export default function App() {
 
   const handleRefresh = () => {
     setIsRefreshing(true);
-    loadPosts(subreddit);
+    loadPosts(subreddit, postSort);
   };
 
   useEffect(() => {
@@ -620,7 +617,7 @@ export default function App() {
     } else if (view === 'profile') {
       setView('feed');
       setSelectedUser(null);
-    } else if (view === 'settings') {
+    } else if (view === 'settings' || view === 'browse') {
       setView('feed');
     } else if (subredditHistory.length > 0) {
       const prevSub = subredditHistory[subredditHistory.length - 1];
@@ -864,13 +861,28 @@ export default function App() {
                           )}
                         </AnimatePresence>
                       </div>
-                      <button 
-                        onClick={handleRefresh}
-                        className={`relative p-2.5 text-text-secondary hover:text-text-primary hover:bg-hover-bg rounded-full transition-all touch-manipulation active:scale-90 overflow-hidden ${isRefreshing ? 'animate-spin text-primary' : ''}`}
-                      >
-                        <RefreshCw size={24} />
-                        <Ripple />
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <div className="relative group">
+                          <select
+                            value={postSort}
+                            onChange={(e) => setPostSort(e.target.value)}
+                            className="bg-primary/10 text-primary font-bold text-sm rounded-full pl-4 pr-10 py-2 focus:outline-none focus:ring-2 focus:ring-primary appearance-none cursor-pointer transition-colors hover:bg-primary/20"
+                          >
+                            <option value="hot">Hot</option>
+                            <option value="new">New</option>
+                            <option value="top">Top</option>
+                            <option value="rising">Rising</option>
+                          </select>
+                          <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-primary pointer-events-none transition-transform group-hover:translate-y-[-40%]" />
+                        </div>
+                        <button 
+                          onClick={handleRefresh}
+                          className={`relative p-2.5 text-text-secondary hover:text-text-primary hover:bg-hover-bg rounded-full transition-all touch-manipulation active:scale-90 overflow-hidden ${isRefreshing ? 'animate-spin text-primary' : ''}`}
+                        >
+                          <RefreshCw size={24} />
+                          <Ripple />
+                        </button>
+                      </div>
                     </div>
                   </motion.div>
                 )}
@@ -927,10 +939,42 @@ export default function App() {
                 </div>
               ) : (
                 <>
+                  {subredditInfo && (
+                    <div className="p-6 md:p-8 flex flex-col gap-6 bg-bg-secondary mb-2">
+                      <div className="flex items-center gap-6">
+                        <div className="w-20 h-20 md:w-24 md:h-24 rounded-full bg-bg-tertiary overflow-hidden shrink-0">
+                          {subredditInfo.icon_img || subredditInfo.community_icon ? (
+                            <img 
+                              src={(subredditInfo.icon_img || subredditInfo.community_icon).split('?')[0]} 
+                              alt="" 
+                              className="w-full h-full object-cover"
+                              referrerPolicy="no-referrer"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-3xl font-display font-bold text-text-secondary">
+                              {subreddit.charAt(0).toUpperCase()}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <h1 className="text-2xl md:text-3xl font-display font-bold text-text-primary tracking-tight">r/{subreddit}</h1>
+                          <div className="text-sm font-medium mt-1 text-text-secondary">
+                            {subredditInfo.subscribers?.toLocaleString()} members
+                          </div>
+                        </div>
+                      </div>
+                      {subredditInfo.public_description && (
+                        <div className="text-base text-text-primary leading-relaxed whitespace-pre-wrap">
+                          {decodeHtml(subredditInfo.public_description)}
+                        </div>
+                      )}
+                    </div>
+                  )}
                   {visiblePosts.map((post, idx) => (
                     <PostCard 
                       key={`${post.id}-${idx}`} 
                       post={post} 
+                      hideSubredditInfo={subreddit !== 'home' && subreddit !== 'all' && subreddit !== 'popular'}
                       onClick={(post) => {
                         scrollPositionRef.current = feedContainerRef.current?.scrollTop || 0;
                         setSelectedPost(post);
@@ -957,6 +1001,91 @@ export default function App() {
                 </>
               )}
             </div>
+          </div>
+        </motion.main>
+      )}
+
+      {/* Browse View */}
+      {view === 'browse' && !selectedPost && (
+        <motion.main 
+          key="browse"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 20 }}
+          transition={{ 
+            type: "spring",
+            stiffness: 300,
+            damping: 30,
+            mass: 1
+          }}
+          className="fixed inset-0 bg-bg-primary z-40 overflow-y-auto overscroll-y-none"
+        >
+          <header className="sticky top-0 z-50 bg-bg-primary/90 backdrop-blur-md px-4 pt-4 pb-2 safe-top">
+            <div className="flex items-center gap-4">
+              <button 
+                onClick={() => setView('feed')}
+                className="relative p-2 -ml-2 text-text-secondary hover:text-text-primary hover:bg-hover-bg rounded-full transition-colors active:scale-95 overflow-hidden"
+              >
+                <ArrowLeft size={24} />
+                <Ripple />
+              </button>
+            </div>
+            <h1 className="text-4xl font-display font-bold text-text-primary mt-2 px-2 tracking-tight">Browse</h1>
+          </header>
+
+          <div className="p-4 md:p-8 max-w-2xl mx-auto flex flex-col gap-8 pb-24">
+            <section>
+              <h2 className="text-sm font-bold text-primary uppercase tracking-wider mb-4 px-2">Feeds</h2>
+              <div className="flex flex-col gap-2">
+                {isLoggedIn && (
+                  <button 
+                    onClick={() => { handleSubredditChange('home'); setView('feed'); }}
+                    className="relative w-full flex items-center gap-4 px-6 py-4 bg-primary/10 text-primary rounded-3xl hover:bg-primary/20 transition-colors overflow-hidden"
+                  >
+                    <Home size={24} />
+                    <span className="font-display font-bold text-lg">Home</span>
+                    <Ripple />
+                  </button>
+                )}
+                <button 
+                  onClick={() => { handleSubredditChange('popular'); setView('feed'); }}
+                  className="relative w-full flex items-center gap-4 px-6 py-4 bg-primary/10 text-primary rounded-3xl hover:bg-primary/20 transition-colors overflow-hidden"
+                >
+                  <TrendingUp size={24} />
+                  <span className="font-display font-bold text-lg">Popular</span>
+                  <Ripple />
+                </button>
+                <button 
+                  onClick={() => { handleSubredditChange('all'); setView('feed'); }}
+                  className="relative w-full flex items-center gap-4 px-6 py-4 bg-primary/10 text-primary rounded-3xl hover:bg-primary/20 transition-colors overflow-hidden"
+                >
+                  <Globe size={24} />
+                  <span className="font-display font-bold text-lg">All</span>
+                  <Ripple />
+                </button>
+              </div>
+            </section>
+
+            {mySubreddits.length > 0 && (
+              <section>
+                <h2 className="text-sm font-bold text-primary uppercase tracking-wider mb-4 px-2">Your Subreddits</h2>
+                <div className="flex flex-col gap-2">
+                  {mySubreddits.map((sub) => (
+                    <button
+                      key={sub}
+                      onClick={() => { handleSubredditChange(sub); setView('feed'); }}
+                      className="relative w-full flex items-center gap-4 px-6 py-4 bg-bg-secondary text-text-primary rounded-3xl hover:bg-hover-bg transition-colors overflow-hidden"
+                    >
+                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                        <Hash size={20} className="text-primary" />
+                      </div>
+                      <span className="font-display font-bold text-lg">r/{sub}</span>
+                      <Ripple />
+                    </button>
+                  ))}
+                </div>
+              </section>
+            )}
           </div>
         </motion.main>
       )}
@@ -995,13 +1124,27 @@ export default function App() {
               initial={false}
               animate={{ y: showHeader ? 0 : -64 }}
               transition={{ duration: 0.3, ease: [0.2, 0, 0, 1] }}
-              className="sticky top-0 z-40 bg-bg-primary/90 backdrop-blur-md px-4 h-16 md:px-8 flex items-center gap-4 shrink-0"
+              className="sticky top-0 z-40 bg-bg-primary/90 backdrop-blur-md px-4 h-16 md:px-8 flex items-center justify-between shrink-0"
             >
-              <button onClick={closeView} className="relative p-2 -ml-2 text-text-secondary hover:text-text-primary hover:bg-hover-bg rounded-full transition-all active:scale-90 overflow-hidden">
-                <ArrowLeft size={24} />
-                <Ripple />
-              </button>
-              <h1 className="text-2xl font-display font-medium text-text-primary">Settings</h1>
+              <div className="flex items-center gap-4">
+                <button onClick={closeView} className="relative p-2 -ml-2 text-text-secondary hover:text-text-primary hover:bg-hover-bg rounded-full transition-all active:scale-90 overflow-hidden">
+                  <ArrowLeft size={24} />
+                  <Ripple />
+                </button>
+                <h1 className="text-2xl font-display font-medium text-text-primary">Settings</h1>
+              </div>
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => {
+                    setIsRefreshing(true);
+                    setTimeout(() => setIsRefreshing(false), 500);
+                  }}
+                  className={`relative p-2 text-text-secondary hover:text-text-primary hover:bg-hover-bg rounded-full transition-all touch-manipulation active:scale-90 overflow-hidden ${isRefreshing ? 'animate-spin text-primary' : ''}`}
+                >
+                  <RefreshCw size={24} />
+                  <Ripple />
+                </button>
+              </div>
             </motion.header>
             <div className="-mt-16 pt-16">
               <div className="p-4 md:p-8 max-w-2xl mx-auto w-full flex flex-col gap-8">
@@ -1235,8 +1378,10 @@ export default function App() {
             className="md:hidden fixed bottom-0 left-0 right-0 bg-bg-primary/95 backdrop-blur-md px-4 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] flex items-center justify-around z-50 transform translate-z-0"
           >
             <MobileNavItem icon={<Home size={20} />} label="Home" active={subreddit === 'home' && view === 'feed'} onClick={() => handleSubredditChange('home')} />
-            <MobileNavItem icon={<TrendingUp size={20} />} label="Popular" active={subreddit === 'popular' && view === 'feed'} onClick={() => handleSubredditChange('popular')} />
-            <MobileNavItem icon={<Globe size={20} />} label="Browse" active={showSubreddits} onClick={() => setShowSubreddits(true)} />
+            <MobileNavItem icon={<Globe size={20} />} label="Browse" active={view === 'browse'} onClick={() => {
+              if (view === 'feed') scrollPositionRef.current = feedContainerRef.current?.scrollTop || 0;
+              setView('browse');
+            }} />
             <MobileNavItem icon={<Settings size={20} />} label="Settings" active={view === 'settings'} onClick={() => {
               if (view === 'feed') scrollPositionRef.current = feedContainerRef.current?.scrollTop || 0;
               setView('settings');

@@ -7,7 +7,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { RedditPost, fetchUserPosts, fetchUserProfile } from '../services/reddit';
 import PostCard from './PostCard';
 import { Ripple } from './Ripple';
-import { ArrowLeft, User, Calendar, Award } from 'lucide-react';
+import { ArrowLeft, User, Calendar, Award, RefreshCw } from 'lucide-react';
 import { motion } from 'motion/react';
 import { SquigglyLoader } from './SquigglyLoader';
 import { decodeHtml } from '../lib/decode';
@@ -34,6 +34,7 @@ export default function UserProfile({
   const [loading, setLoading] = useState(true);
   const [after, setAfter] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [showHeader, setShowHeader] = useState(true);
   const lastScrollY = useRef(0);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -54,6 +55,23 @@ export default function UserProfile({
       setLoading(false);
     }
   }, [username]);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      const [profileData, { posts: userPosts, after: nextAfter }] = await Promise.all([
+        fetchUserProfile(username),
+        fetchUserPosts(username)
+      ]);
+      setProfile(profileData);
+      setPosts(userPosts);
+      setAfter(nextAfter);
+    } catch (error) {
+      console.error('Failed to refresh user profile', error);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   // Scroll listener for hiding/showing header
   useEffect(() => {
@@ -125,16 +143,27 @@ export default function UserProfile({
         initial={false}
         animate={{ y: showHeader ? 0 : -100 }}
         transition={{ duration: 0.3, ease: [0.2, 0, 0, 1] }}
-        className="absolute top-0 left-0 right-0 bg-bg-primary/90 backdrop-blur-md p-4 md:px-6 flex items-center gap-4 z-20"
+        className="absolute top-0 left-0 right-0 bg-bg-primary/90 backdrop-blur-md p-4 md:px-6 flex items-center justify-between z-20"
       >
-        <button 
-          onClick={onClose}
-          className="relative p-2 -ml-2 text-text-secondary hover:text-text-primary hover:bg-hover-bg rounded-full transition-all active:scale-90 overflow-hidden"
-        >
-          <ArrowLeft size={24} />
-          <Ripple />
-        </button>
-        <h2 className="font-display font-medium text-xl text-text-primary">u/{username}</h2>
+        <div className="flex items-center gap-4">
+          <button 
+            onClick={onClose}
+            className="relative p-2 -ml-2 text-text-secondary hover:text-text-primary hover:bg-hover-bg rounded-full transition-all active:scale-90 overflow-hidden"
+          >
+            <ArrowLeft size={24} />
+            <Ripple />
+          </button>
+          <h2 className="font-display font-medium text-xl text-text-primary">u/{username}</h2>
+        </div>
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={handleRefresh}
+            className={`relative p-2 text-text-secondary hover:text-text-primary hover:bg-hover-bg rounded-full transition-all touch-manipulation active:scale-90 overflow-hidden ${isRefreshing ? 'animate-spin text-primary' : ''}`}
+          >
+            <RefreshCw size={24} />
+            <Ripple />
+          </button>
+        </div>
       </motion.header>
 
       <div className="flex-1 overflow-y-auto pt-[72px]" ref={scrollContainerRef}>

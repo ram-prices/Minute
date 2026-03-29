@@ -292,27 +292,42 @@ export async function fetchMe(): Promise<any> {
   return await response.json();
 }
 
-export async function fetchSubreddit(subreddit: string = 'all', after?: string): Promise<{ posts: RedditPost[], after: string }> {
+export async function fetchSubredditInfo(subreddit: string): Promise<any> {
+  const useOAuth = !!accessToken;
+  const baseUrl = useOAuth ? 'https://oauth.reddit.com' : 'https://www.reddit.com';
+  const url = `${baseUrl}/r/${subreddit}/about.json`;
+  
+  try {
+    const response = await redditFetch(url);
+    if (!response.ok) return null;
+    const data = await response.json();
+    return data.data;
+  } catch (error) {
+    console.error(`Failed to fetch info for r/${subreddit}`, error);
+    return null;
+  }
+}
+
+export async function fetchSubreddit(subreddit: string = 'all', after?: string, sort: string = 'hot'): Promise<{ posts: RedditPost[], after: string }> {
   const useOAuth = !!accessToken;
   const baseUrl = useOAuth ? 'https://oauth.reddit.com' : 'https://www.reddit.com';
   
-  // If logged in and subreddit is 'home' or 'all', we might want the frontpage
   let path = `/r/${subreddit}`;
-  if (subreddit === 'home' || subreddit === 'all') {
-    if (subreddit === 'home') {
-      path = useOAuth ? '/' : '/r/popular';
-    } else {
-      path = `/r/${subreddit}`;
-    }
+  if (subreddit === 'home') {
+    path = useOAuth ? '' : '/r/popular';
+  } else if (subreddit === 'all') {
+    path = `/r/all`;
   }
   
-  // Ensure path doesn't end with slash before adding .json
-  const cleanPath = path.endsWith('/') && path !== '/' ? path.slice(0, -1) : path;
-  const url = `${baseUrl}${cleanPath}${cleanPath === '/' ? '' : '.json'}?limit=25&sr_detail=1${after ? `&after=${after}` : ''}`;
-  // Special case for frontpage with oauth
-  const finalUrl = useOAuth && cleanPath === '/' ? `${baseUrl}/.json?limit=25&sr_detail=1${after ? `&after=${after}` : ''}` : url;
+  if (sort && sort !== 'hot') {
+    path = `${path}/${sort}`;
+  }
   
-  const response = await redditFetch(finalUrl);
+  const urlPath = path === '' ? '/' : path;
+  const timeParam = sort === 'top' ? '&t=all' : '';
+  const url = `${baseUrl}${urlPath}.json?limit=25&sr_detail=1${after ? `&after=${after}` : ''}${timeParam}`;
+  
+  const response = await redditFetch(url);
   if (!response.ok) {
     const errorText = await response.text().catch(() => 'Unknown error');
     throw new Error(`Failed to fetch subreddit: ${response.status} ${errorText}`);
@@ -337,17 +352,19 @@ type CacheEntry = {
 const postDetailsCache = new Map<string, CacheEntry>();
 const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 
-export async function fetchPostDetails(permalink: string): Promise<{ post: RedditPost, comments: RedditComment[] }> {
+export async function fetchPostDetails(permalink: string, forceRefresh = false, sort: string = 'confidence'): Promise<{ post: RedditPost, comments: RedditComment[] }> {
+  const cacheKey = `${permalink}?sort=${sort}`;
   const now = Date.now();
-  const cached = postDetailsCache.get(permalink);
+  const cached = postDetailsCache.get(cacheKey);
   
-  if (cached && now - cached.timestamp < CACHE_TTL) {
+  if (!forceRefresh && cached && now - cached.timestamp < CACHE_TTL) {
     if (cached.data) return cached.data;
     if (cached.promise) return cached.promise;
   }
 
   const baseUrl = accessToken ? 'https://oauth.reddit.com' : 'https://www.reddit.com';
-  const url = `${baseUrl}${permalink}.json`;
+  const cleanPermalink = permalink.endsWith('/') ? permalink.slice(0, -1) : permalink;
+  const url = `${baseUrl}${cleanPermalink}.json?sort=${sort}`;
   
   const fetchPromise = (async () => {
     try {
@@ -360,27 +377,17 @@ export async function fetchPostDetails(permalink: string): Promise<{ post: Reddi
         comments: data[1].data.children.map((child: any) => child.data)
       };
 
-      postDetailsCache.set(permalink, { data: result, timestamp: Date.now() });
+      postDetailsCache.set(cacheKey, { data: result, timestamp: Date.now() });
       return result;
     } catch (error) {
-      postDetailsCache.delete(permalink);
+      postDetailsCache.delete(cacheKey);
       throw error;
     }
   })();
 
-  postDetailsCache.set(permalink, { promise: fetchPromise, timestamp: now });
+  postDetailsCache.set(cacheKey, { promise: fetchPromise, timestamp: now });
   
   return fetchPromise;
-}
-
-export async function preloadPostDetails(permalink: string) {
-  const now = Date.now();
-  const cached = postDetailsCache.get(permalink);
-  if (cached && now - cached.timestamp < CACHE_TTL) {
-    return;
-  }
-  // Return the promise so we can await it, catch errors silently
-  return fetchPostDetails(permalink).catch(() => {});
 }
 
 export async function searchSubreddits(query: string): Promise<string[]> {
