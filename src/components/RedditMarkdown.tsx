@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
@@ -8,35 +8,60 @@ import { decodeHtml } from '../lib/decode';
 function resolveMediaSrc(src: string | undefined, metadata: any): { url: string; isVideo: boolean } | null {
   if (!src) return null;
 
+  const cleanSrc = src.split('?')[0].replace(/\/$/, '');
+
   // Direct media_metadata lookup (Reddit native GIFs: ![gif](mediaId))
   if (metadata?.[src]) {
     const m = metadata[src];
     // AnimatedImage type: has s.gif or s.mp4 or s.u
-    // Prioritize GIF so it renders in an <img> tag which supports referrerPolicy="no-referrer"
-    if (m.s?.gif) return { url: m.s.gif.replace(/&amp;/g, '&'), isVideo: false };
+    // Prioritize MP4 for performance
     if (m.s?.mp4) return { url: m.s.mp4.replace(/&amp;/g, '&'), isVideo: true };
+    if (m.s?.gif) return { url: m.s.gif.replace(/&amp;/g, '&'), isVideo: false };
     if (m.s?.u)   return { url: m.s.u.replace(/&amp;/g, '&'), isVideo: false };
   }
 
   // giphy| and tenor| shorthand
-  if (src.startsWith('giphy|')) {
-    const id = src.split('|')[1];
-    return { url: `https://media.giphy.com/media/${id}/giphy.gif`, isVideo: false };
+  if (cleanSrc.startsWith('giphy|')) {
+    const id = cleanSrc.split('|')[1];
+    return { url: `https://i.giphy.com/${id}.mp4`, isVideo: true };
   }
-  if (src.startsWith('tenor|')) {
-    const id = src.split('|')[1];
-    // tenor IDs are numeric; best effort URL
-    return { url: `https://c.tenor.com/${id}/tenor.gif`, isVideo: false };
+  if (cleanSrc.startsWith('tenor|')) {
+    const id = cleanSrc.split('|')[1];
+    return { url: `https://c.tenor.com/${id}/tenor.mp4`, isVideo: true };
   }
 
-  // Full giphy/tenor URLs
-  if (src.includes('giphy.com/gifs/')) {
-    const match = src.split('?')[0].match(/giphy\.com\/gifs\/(?:.*-)?([a-zA-Z0-9]+)$/);
-    if (match?.[1]) return { url: `https://media.giphy.com/media/${match[1]}/giphy.gif`, isVideo: false };
+  // Full giphy URLs
+  if (cleanSrc.includes('giphy.com/gifs/')) {
+    const match = cleanSrc.match(/giphy\.com\/gifs\/(?:.*-)?([a-zA-Z0-9]+)$/);
+    if (match?.[1]) return { url: `https://i.giphy.com/${match[1]}.mp4`, isVideo: true };
   }
-  if (src.includes('tenor.com/view/')) {
-    const match = src.split('?')[0].match(/tenor\.com\/view\/(?:.*-)?([0-9]+)$/);
-    if (match?.[1]) return { url: `https://c.tenor.com/${match[1]}/tenor.gif`, isVideo: false };
+  if (cleanSrc.includes('media.giphy.com/media/')) {
+    const match = cleanSrc.match(/media\.giphy\.com\/media\/([a-zA-Z0-9]+)/);
+    if (match?.[1]) return { url: `https://i.giphy.com/${match[1]}.mp4`, isVideo: true };
+  }
+
+  // Full tenor URLs
+  if (cleanSrc.includes('tenor.com/view/')) {
+    const match = cleanSrc.match(/tenor\.com\/view\/(?:.*-)?([0-9]+)$/);
+    if (match?.[1]) return { url: `https://c.tenor.com/${match[1]}/tenor.mp4`, isVideo: true };
+  }
+  if (cleanSrc.includes('c.tenor.com/') && cleanSrc.endsWith('.gif')) {
+    return { url: cleanSrc.replace('.gif', '.mp4'), isVideo: true };
+  }
+
+  // Imgur gifv
+  if (cleanSrc.includes('imgur.com/') && cleanSrc.endsWith('.gifv')) {
+    return { url: cleanSrc.replace('.gifv', '.mp4'), isVideo: true };
+  }
+
+  // Direct mp4
+  if (cleanSrc.endsWith('.mp4')) {
+    return { url: src, isVideo: true };
+  }
+
+  // Direct gif/jpg/png
+  if (cleanSrc.match(/\.(gif|jpe?g|png)$/i)) {
+    return { url: src, isVideo: false };
   }
 
   // preview.redd.it and other direct media
@@ -47,7 +72,100 @@ function resolveMediaSrc(src: string | undefined, metadata: any): { url: string;
   return null;
 }
 
-const RedditMarkdown = ({ content, metadata }: { content: string; metadata?: any }) => {
+const LinkEmbed = ({ href, resolved, props }: { href: string, resolved: { url: string, isVideo: boolean }, props: any }) => {
+  const [error, setError] = useState(false);
+  const hasCustomText = props.children && String(props.children) !== href;
+
+  if (error) {
+    return (
+      <a
+        {...props}
+        href={href}
+        className="text-primary hover:underline font-medium break-words"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        {props.children || href}
+      </a>
+    );
+  }
+
+  return (
+    <span className="inline-flex flex-col gap-1 my-2 w-full">
+      {hasCustomText && (
+        <a
+          {...props}
+          href={href}
+          className="text-primary hover:underline font-medium break-words"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          {props.children}
+        </a>
+      )}
+      <a href={href} target="_blank" rel="noopener noreferrer" className="block w-full relative group">
+        {resolved.isVideo ? (
+          <video
+            src={resolved.url}
+            className="max-w-full rounded-lg bg-black/5"
+            autoPlay
+            loop
+            muted
+            playsInline
+            controls
+            onError={() => setError(true)}
+          />
+        ) : (
+          <img
+            src={resolved.url}
+            alt={String(props.children || '')}
+            referrerPolicy="no-referrer"
+            className="max-w-full rounded-lg bg-black/5"
+            onError={() => setError(true)}
+          />
+        )}
+      </a>
+    </span>
+  );
+};
+
+const ImageEmbed = ({ rawSrc, resolved, props, isEmoji }: { rawSrc: string, resolved: { url: string, isVideo: boolean } | null, props: any, isEmoji: boolean }) => {
+  const [error, setError] = useState(false);
+  const finalSrc = resolved?.url ?? rawSrc;
+  const isVideo = resolved?.isVideo ?? false;
+
+  if (error || !finalSrc) {
+    return <span className="italic text-text-secondary">[{props.alt || 'image'}]</span>;
+  }
+
+  if (isVideo) {
+    return (
+      <video
+        src={finalSrc}
+        className={`${props.className || ''} max-w-full rounded-lg my-2 bg-black/5`}
+        autoPlay
+        loop
+        muted
+        playsInline
+        controls
+        onError={() => setError(true)}
+      />
+    );
+  }
+
+  return (
+    <img
+      {...props}
+      src={finalSrc}
+      className={isEmoji ? 'reddit-emoji inline-block w-5 h-5 align-middle' : `${props.className || ''} max-w-full rounded-lg my-2 bg-black/5`}
+      referrerPolicy="no-referrer"
+      loading="lazy"
+      onError={() => setError(true)}
+    />
+  );
+};
+
+const RedditMarkdown = ({ content, metadata, onRedditLinkClick }: { content: string; metadata?: any; onRedditLinkClick?: (url: string) => void }) => {
   if (!content) return null;
 
   const decodedContent = decodeHtml(content);
@@ -75,26 +193,27 @@ const RedditMarkdown = ({ content, metadata }: { content: string; metadata?: any
 
           const resolved = resolveMediaSrc(href, metadata);
           if (resolved) {
-            if (resolved.isVideo) {
-              return (
-                <video
-                  src={resolved.url}
-                  className="max-w-full rounded-lg"
-                  autoPlay
-                  loop
-                  muted
-                  playsInline
-                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                />
-              );
-            }
+            return <LinkEmbed href={href} resolved={resolved} props={props} />;
+          }
+
+          if (onRedditLinkClick && (
+            href.includes('reddit.com/r/') || 
+            href.startsWith('/r/') || 
+            href.includes('reddit.com/u/') || 
+            href.startsWith('/u/') || 
+            href.includes('redd.it/') ||
+            href.match(/reddit\.com\/[a-zA-Z0-9]+\/?$/)
+          )) {
             return (
-              <img
-                src={resolved.url}
-                alt={String(props.children || '')}
-                referrerPolicy="no-referrer"
-                className="max-w-full rounded-lg"
-                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+              <a
+                {...props}
+                href={href}
+                className="text-primary hover:underline font-medium break-words"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onRedditLinkClick(href);
+                }}
               />
             );
           }
@@ -103,9 +222,10 @@ const RedditMarkdown = ({ content, metadata }: { content: string; metadata?: any
             <a
               {...props}
               href={href}
-              className="text-primary hover:underline font-medium"
+              className="text-primary hover:underline font-medium break-words"
               target="_blank"
               rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
             />
           );
         },
@@ -113,35 +233,9 @@ const RedditMarkdown = ({ content, metadata }: { content: string; metadata?: any
         img: ({ node, ...props }) => {
           const isEmoji = props.alt?.startsWith(':') && props.alt?.endsWith(':');
           const rawSrc = props.src?.replace(/&amp;/g, '&');
-
           const resolved = rawSrc ? resolveMediaSrc(rawSrc, metadata) : null;
-          const finalSrc = resolved?.url ?? rawSrc;
-          const isVideo = resolved?.isVideo ?? false;
 
-          if (isVideo && finalSrc) {
-            return (
-              <video
-                src={finalSrc}
-                className={`${props.className || ''} max-w-full rounded-lg`}
-                autoPlay
-                loop
-                muted
-                playsInline
-                onError={(e) => { e.currentTarget.style.display = 'none'; }}
-              />
-            );
-          }
-
-          return (
-            <img
-              {...props}
-              src={finalSrc}
-              className={isEmoji ? 'reddit-emoji' : `${props.className || ''} max-w-full rounded-lg`}
-              referrerPolicy="no-referrer"
-              loading="lazy"
-              onError={(e) => { e.currentTarget.style.display = 'none'; }}
-            />
-          );
+          return <ImageEmbed rawSrc={rawSrc || ''} resolved={resolved} props={props} isEmoji={isEmoji || false} />;
         },
 
         h1: ({ node, ...props }) => <h1 {...props} className="text-base font-bold my-2" />,

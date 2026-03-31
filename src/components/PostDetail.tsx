@@ -20,6 +20,7 @@ import { Ripple } from './Ripple';
 import { decodeHtml } from '../lib/decode';
 import { formatTimestamp } from '../lib/time';
 import { getGifUrl, getProxiedMediaUrl } from '../lib/media';
+import ReplyComposer from './ReplyComposer';
 
 const RedditTitle = ({ title, metadata }: { title: string; metadata?: any }) => {
   if (!title) return null;
@@ -68,6 +69,7 @@ interface PostDetailProps {
   onFilterSubreddit?: (subreddit: string) => void;
   onFilterUser?: (username: string) => void;
   onMediaClick?: (post: RedditPost, index?: number) => void;
+  onRedditLinkClick?: (url: string) => void;
 }
 
 export default function PostDetail({ 
@@ -79,14 +81,13 @@ export default function PostDetail({
   onUserClick,
   onFilterSubreddit,
   onFilterUser,
-  onMediaClick
+  onMediaClick,
+  onRedditLinkClick
 }: PostDetailProps) {
   const [comments, setComments] = useState<RedditComment[]>([]);
   const [loading, setLoading] = useState(true);
   const [voteDir, setVoteDir] = useState(post.likes === true ? 1 : post.likes === false ? -1 : 0);
   const [localScore, setLocalScore] = useState(post.score);
-  const [replyText, setReplyText] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [showReplyModal, setShowReplyModal] = useState(false);
   const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
   const [showMenu, setShowMenu] = useState(false);
@@ -231,15 +232,13 @@ export default function PostDetail({
     !!(post.selftext_html && post.selftext_html.includes('<iframe')) ||
     !!(post.selftext && post.selftext.includes('preview.redd.it'));
 
-  const handleMainReply = async () => {
-    if (!onComment || !replyText.trim()) return;
-    setIsSubmitting(true);
-    const newComment = await onComment(post.name, replyText);
+  const handleMainReply = async (text: string) => {
+    if (!onComment || !text.trim()) return;
+    const newComment = await onComment(post.name, text);
     if (newComment) {
       setComments(prev => [newComment, ...prev]);
-      setReplyText('');
+      setShowReplyModal(false);
     }
-    setIsSubmitting(false);
   };
 
   const handleScreenshot = async (elementId: string) => {
@@ -400,6 +399,8 @@ export default function PostDetail({
                 isFirst={true}
                 isLast={true}
                 useMasterColor={true}
+                onRedditLinkClick={onRedditLinkClick}
+                postAuthor={post.author}
               />
             </motion.div>
           ) : (
@@ -439,7 +440,7 @@ export default function PostDetail({
                 }}
                 className="relative font-bold text-text-primary hover:underline px-1 -mx-1 rounded-md overflow-hidden shrink-0"
               >
-                <span className="block">u/{post.author}</span>
+                <span className="block">{post.author}</span>
                 <Ripple />
               </button>
               <Flair 
@@ -611,8 +612,8 @@ export default function PostDetail({
           </div>
 
           {post.selftext && (
-            <div className="text-sm text-text-primary leading-snug bg-bg-tertiary p-4 md:p-6 rounded-2xl prose dark:prose-invert prose-sm max-w-none break-anywhere mt-2 prose-p:leading-snug prose-headings:leading-snug prose-li:leading-snug prose-p:my-1.5 prose-headings:my-2 prose-ul:my-1.5">
-              <RedditMarkdown content={post.selftext} metadata={post.media_metadata} />
+            <div className="text-sm text-text-primary leading-snug bg-bg-tertiary p-4 md:p-6 rounded-2xl prose dark:prose-invert prose-sm max-w-none break-anywhere -mt-2 prose-p:leading-snug prose-headings:leading-snug prose-li:leading-snug prose-p:my-1.5 prose-headings:my-2 prose-ul:my-1.5">
+              <RedditMarkdown content={post.selftext} metadata={post.media_metadata} onRedditLinkClick={onRedditLinkClick} />
             </div>
           )}
 
@@ -751,7 +752,7 @@ export default function PostDetail({
                       className="relative w-full px-5 py-3.5 text-left text-sm font-medium text-text-primary hover:bg-hover-bg flex items-center gap-3 transition-colors overflow-hidden"
                     >
                       <User size={18} className="text-red-500" />
-                      Filter u/{post.author}
+                      Filter {post.author}
                       <Ripple />
                     </button>
                   </motion.div>
@@ -781,6 +782,8 @@ export default function PostDetail({
                   isFirst={true}
                   isLast={true}
                   useMasterColor={index % 2 === 0}
+                  onRedditLinkClick={onRedditLinkClick}
+                  postAuthor={post.author}
                 />
               ))}
             </div>
@@ -801,55 +804,13 @@ export default function PostDetail({
       </button>
 
       {/* Comment Modal */}
-      {showReplyModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          <div 
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            onClick={() => setShowReplyModal(false)}
-          />
-          <div className="relative w-full max-w-lg bg-bg-tertiary rounded-3xl overflow-hidden flex flex-col">
-            <header className="p-5 flex items-center justify-between">
-              <h3 className="font-display font-bold text-lg text-text-primary">Post Comment</h3>
-              <button 
-                onClick={() => setShowReplyModal(false)}
-                className="relative p-2 text-text-secondary hover:text-text-primary hover:bg-hover-bg rounded-full transition-all active:scale-90 overflow-hidden"
-              >
-                <X size={24} />
-                <Ripple />
-              </button>
-            </header>
-            <div className="p-5 flex flex-col gap-4">
-              <textarea 
-                autoFocus
-                value={replyText}
-                onChange={(e) => setReplyText(e.target.value)}
-                placeholder="What are your thoughts?"
-                className="w-full p-4 bg-bg-primary text-text-primary rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-primary transition-all min-h-[150px]"
-              />
-              <div className="flex justify-end gap-3 mt-2">
-                <button 
-                  onClick={() => setShowReplyModal(false)}
-                  className="relative px-5 py-2.5 text-sm font-bold text-text-secondary hover:text-text-primary hover:bg-hover-bg rounded-full transition-all overflow-hidden"
-                >
-                  Cancel
-                  <Ripple />
-                </button>
-                <button 
-                  onClick={async () => {
-                    await handleMainReply();
-                    setShowReplyModal(false);
-                  }}
-                  disabled={isSubmitting || !replyText.trim()}
-                  className="relative px-6 py-2.5 bg-primary text-on-primary rounded-full text-sm font-bold hover:opacity-90 transition-all disabled:opacity-50 active:scale-95 overflow-hidden"
-                >
-                  {isSubmitting ? 'Posting...' : 'Post'}
-                  <Ripple />
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <ReplyComposer
+        isOpen={showReplyModal}
+        originalContent={post.selftext || post.title}
+        originalAuthor={post.author}
+        onSubmit={handleMainReply}
+        onCancel={() => setShowReplyModal(false)}
+      />
     </div>
   );
 }
@@ -864,7 +825,10 @@ function CommentItem({
   isLast = false,
   useMasterColor = false,
   onIsolate,
-  isIsolatedRoot = false
+  isIsolatedRoot = false,
+  onRedditLinkClick,
+  postAuthor,
+  ancestors
 }: { 
   comment: RedditComment, 
   depth?: number, 
@@ -875,13 +839,14 @@ function CommentItem({
   isLast?: boolean,
   useMasterColor?: boolean,
   onIsolate?: (comment: RedditComment) => void,
-  isIsolatedRoot?: boolean
+  isIsolatedRoot?: boolean,
+  onRedditLinkClick?: (url: string) => void,
+  postAuthor?: string,
+  ancestors?: { author: string; body: string }[]
 }) {
   const [voteDir, setVoteDir] = useState(comment.likes === true ? 1 : comment.likes === false ? -1 : 0);
   const [localScore, setLocalScore] = useState(comment.score);
   const [showReply, setShowReply] = useState(false);
-  const [replyText, setReplyText] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [localReplies, setLocalReplies] = useState<RedditComment[]>([]);
   const [showMenu, setShowMenu] = useState(false);
   const [showActions, setShowActions] = useState(false);
@@ -950,16 +915,13 @@ function CommentItem({
     !!(comment.body_html && comment.body_html.includes('<iframe')) ||
     !!(comment.body && comment.body.includes('preview.redd.it'));
 
-  const handleReply = async () => {
-    if (!onComment || !replyText.trim()) return;
-    setIsSubmitting(true);
-    const newComment = await onComment(comment.name, replyText);
+  const handleReply = async (text: string) => {
+    if (!onComment || !text.trim()) return;
+    const newComment = await onComment(comment.name, text);
     if (newComment) {
       setLocalReplies(prev => [newComment, ...prev]);
-      setReplyText('');
       setShowReply(false);
     }
-    setIsSubmitting(false);
   };
 
   const handleScreenshot = async (elementId: string) => {
@@ -1061,7 +1023,7 @@ function CommentItem({
           {/* Vertical line for the comment body itself */}
           {rendersReplies && (
             <div 
-              className={`w-[2px] flex-1 mt-1.5 rounded-full ${getThreadLineColorClass(depth, false)}`} 
+              className={`w-[2px] flex-1 -mt-2 z-0 ${getThreadLineColorClass(depth, false)}`} 
             />
           )}
         </div>
@@ -1074,8 +1036,13 @@ function CommentItem({
                 onClick={(e) => { e.stopPropagation(); onUserClick?.(comment.author); }}
                 className="font-bold text-text-primary hover:underline shrink-0"
               >
-                u/{comment.author}
+                {comment.author}
               </button>
+              {postAuthor && comment.author === postAuthor && (
+                <span className="text-[10px] font-bold bg-primary/10 text-primary px-1.5 py-0.5 rounded-sm shrink-0">
+                  OP
+                </span>
+              )}
               <Flair 
                 text={comment.author_flair_text} 
                 richtext={comment.author_flair_richtext}
@@ -1090,7 +1057,7 @@ function CommentItem({
               <span className="opacity-75 shrink-0">{formatTimestamp(comment.created_utc)}</span>
             </div>
             <div className="text-sm text-text-primary leading-snug prose dark:prose-invert prose-sm max-w-none break-anywhere prose-p:leading-snug prose-headings:leading-snug prose-li:leading-snug prose-p:my-1.5 prose-headings:my-2 prose-ul:my-1.5">
-              <RedditMarkdown content={comment.body} metadata={comment.media_metadata} />
+              <RedditMarkdown content={comment.body} metadata={comment.media_metadata} onRedditLinkClick={onRedditLinkClick} />
             </div>
             
             <AnimatePresence>
@@ -1216,33 +1183,14 @@ function CommentItem({
               )}
             </AnimatePresence>
 
-        {showReply && (
-          <div className="mt-2 flex flex-col gap-3">
-            <textarea 
-              value={replyText}
-              onChange={(e) => setReplyText(e.target.value)}
-              placeholder="Reply to this comment..."
-              className="w-full p-3 bg-bg-tertiary text-text-primary rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-primary transition-all min-h-[80px]"
-            />
-            <div className="flex justify-end gap-2">
-              <button 
-                onClick={() => setShowReply(false)}
-                className="relative px-4 py-2 text-xs font-bold text-text-secondary hover:text-text-primary hover:bg-hover-bg rounded-full transition-all overflow-hidden"
-              >
-                Cancel
-                <Ripple />
-              </button>
-              <button 
-                onClick={handleReply}
-                disabled={isSubmitting || !replyText.trim()}
-                className="relative px-5 py-2 bg-primary text-on-primary rounded-full text-xs font-bold hover:opacity-90 transition-all disabled:opacity-50 active:scale-95 overflow-hidden"
-              >
-                {isSubmitting ? 'Posting...' : 'Reply'}
-                <Ripple />
-              </button>
-            </div>
-          </div>
-        )}
+        <ReplyComposer
+          isOpen={showReply}
+          originalContent={comment.body}
+          originalAuthor={comment.author}
+          ancestors={ancestors}
+          onSubmit={handleReply}
+          onCancel={() => setShowReply(false)}
+        />
 
         {hasReplies && depth >= 6 && !isIsolatedRoot && (
           <div className="mt-2 mb-2 relative flex items-center">
@@ -1290,6 +1238,9 @@ function CommentItem({
                     isLast={isLast && index === allReplies.length - 1}
                     useMasterColor={index % 2 === 0}
                     onIsolate={onIsolate}
+                    onRedditLinkClick={onRedditLinkClick}
+                    postAuthor={postAuthor}
+                    ancestors={[...(ancestors || []), { author: comment.author, body: comment.body }]}
                   />
                 </div>
               </div>

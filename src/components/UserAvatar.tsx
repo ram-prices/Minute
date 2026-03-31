@@ -6,6 +6,34 @@ import { getUserProfilePic } from '../services/reddit';
 const avatarCache = new Map<string, string | null>();
 const pendingFetches = new Map<string, Promise<string | null>>();
 
+// Rate-limit avatar fetches: max 3 concurrent, queued thereafter
+let activeFetches = 0;
+const MAX_CONCURRENT = 3;
+const fetchQueue: Array<() => void> = [];
+
+function scheduleAvatarFetch(fn: () => void) {
+  if (activeFetches < MAX_CONCURRENT) {
+    activeFetches++;
+    fn();
+  } else {
+    fetchQueue.push(fn);
+  }
+}
+
+function onFetchDone() {
+  activeFetches--;
+  if (fetchQueue.length > 0) {
+    const next = fetchQueue.shift()!;
+    activeFetches++;
+    next();
+  }
+}
+
+// System accounts and bots that never have avatars – skip fetching them
+const NO_AVATAR_ACCOUNTS = new Set([
+  'AutoModerator', '[deleted]', 'reddit', 'redditads', 'anti-gif-bot',
+]);
+
 interface UserAvatarProps {
   username: string;
   size?: number;
@@ -13,18 +41,30 @@ interface UserAvatarProps {
   iconClassName?: string;
 }
 
-export function UserAvatar({ username, size = 14, className = '', iconClassName = '' }: UserAvatarProps) {
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(avatarCache.get(username) || null);
+export const UserAvatar = React.memo(function UserAvatar({
+  username,
+  size = 14,
+  className = '',
+  iconClassName = '',
+}: UserAvatarProps) {
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(
+    avatarCache.has(username) ? avatarCache.get(username)! : null
+  );
 
   useEffect(() => {
     if (avatarCache.has(username)) {
-      setAvatarUrl(avatarCache.get(username) || null);
+      setAvatarUrl(avatarCache.get(username) ?? null);
       return;
     }
 
-    let isMounted = true;
+    if (NO_AVATAR_ACCOUNTS.has(username)) {
+      avatarCache.set(username, null);
+      return;
+    }
 
-    const fetchAvatar = async () => {
+    let cancelled = false;
+
+    scheduleAvatarFetch(async () => {
       try {
         let fetchPromise = pendingFetches.get(username);
         if (!fetchPromise) {
@@ -33,32 +73,28 @@ export function UserAvatar({ username, size = 14, className = '', iconClassName 
         }
 
         const url = await fetchPromise;
-        
-        if (isMounted) {
-          if (url) {
-            avatarCache.set(username, url);
-          } else {
-            avatarCache.set(username, null);
-          }
-          setAvatarUrl(url);
-        }
-      } catch (error) {
-        console.error('Failed to fetch avatar for', username, error);
-      }
-    };
+        avatarCache.set(username, url ?? null);
+        pendingFetches.delete(username);
 
-    fetchAvatar();
+        if (!cancelled) setAvatarUrl(url ?? null);
+      } catch {
+        avatarCache.set(username, null);
+        pendingFetches.delete(username);
+      } finally {
+        onFetchDone();
+      }
+    });
 
     return () => {
-      isMounted = false;
+      cancelled = true;
     };
   }, [username]);
 
   if (avatarUrl) {
     return (
-      <img 
-        src={avatarUrl} 
-        alt={`u/${username}`} 
+      <img
+        src={avatarUrl}
+        alt={`${username}`}
         className={`w-full h-full object-cover ${className}`}
         referrerPolicy="no-referrer"
       />
@@ -66,4 +102,4 @@ export function UserAvatar({ username, size = 14, className = '', iconClassName 
   }
 
   return <User size={size} className={iconClassName} />;
-}
+});

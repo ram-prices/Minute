@@ -13,25 +13,22 @@ interface RippleItem {
   size: number;
 }
 
+let isGlobalListenerAdded = false;
+const activeRippleParents = new Set<HTMLElement>();
+
 export const Ripple = ({ color = 'currentColor', duration = 600 }: RippleProps) => {
   const [ripples, setRipples] = useState<RippleItem[]>([]);
   const [isTapping, setIsTapping] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const addRipple = (event: MouseEvent | TouchEvent) => {
+  const addRipple = (event: PointerEvent) => {
     if (!containerRef.current) return;
     
     setIsTapping(true);
     const container = containerRef.current.getBoundingClientRect();
     
-    let clientX, clientY;
-    if ('touches' in event) {
-      clientX = event.touches[0].clientX;
-      clientY = event.touches[0].clientY;
-    } else {
-      clientX = event.clientX;
-      clientY = event.clientY;
-    }
+    const clientX = event.clientX;
+    const clientY = event.clientY;
 
     // Increase size to ensure it covers the entire area even from corners
     const size = Math.max(container.width, container.height) * 2.5;
@@ -54,24 +51,41 @@ export const Ripple = ({ color = 'currentColor', duration = 600 }: RippleProps) 
     const parent = containerRef.current?.parentElement;
     if (!parent) return;
 
-    const onMouseDown = (e: MouseEvent) => addRipple(e);
-    const onTouchStart = (e: TouchEvent) => addRipple(e);
-    const onStop = () => handleStopTapping();
+    parent.classList.add('ripple-parent');
+    (parent as any)._rippleStart = addRipple;
+    (parent as any)._rippleStop = handleStopTapping;
 
-    parent.addEventListener('mousedown', onMouseDown);
-    parent.addEventListener('touchstart', onTouchStart, { passive: true });
-    parent.addEventListener('mouseup', onStop);
-    parent.addEventListener('mouseleave', onStop);
-    parent.addEventListener('touchend', onStop);
-    parent.addEventListener('touchcancel', onStop);
+    if (!isGlobalListenerAdded && typeof document !== 'undefined') {
+      isGlobalListenerAdded = true;
+      
+      const handlePointerDown = (e: PointerEvent) => {
+        const target = e.target as HTMLElement;
+        const rippleParent = target.closest('.ripple-parent') as HTMLElement;
+        if (rippleParent && (rippleParent as any)._rippleStart) {
+          activeRippleParents.add(rippleParent);
+          (rippleParent as any)._rippleStart(e);
+        }
+      };
+      
+      const handlePointerUp = (e: PointerEvent) => {
+        activeRippleParents.forEach(parent => {
+          if ((parent as any)._rippleStop) {
+            (parent as any)._rippleStop();
+          }
+        });
+        activeRippleParents.clear();
+      };
+
+      document.addEventListener('pointerdown', handlePointerDown, { passive: true });
+      document.addEventListener('pointerup', handlePointerUp, { passive: true });
+      document.addEventListener('pointercancel', handlePointerUp, { passive: true });
+    }
 
     return () => {
-      parent.removeEventListener('mousedown', onMouseDown);
-      parent.removeEventListener('touchstart', onTouchStart);
-      parent.removeEventListener('mouseup', onStop);
-      parent.removeEventListener('mouseleave', onStop);
-      parent.removeEventListener('touchend', onStop);
-      parent.removeEventListener('touchcancel', onStop);
+      parent.classList.remove('ripple-parent');
+      delete (parent as any)._rippleStart;
+      delete (parent as any)._rippleStop;
+      activeRippleParents.delete(parent);
     };
   }, []);
 

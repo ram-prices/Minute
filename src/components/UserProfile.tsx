@@ -19,6 +19,7 @@ interface UserProfileProps {
   onVote: (id: string, dir: number) => Promise<boolean>;
   onSubredditClick: (subreddit: string) => void;
   onMediaClick: (post: RedditPost) => void;
+  onRedditLinkClick?: (url: string) => void;
 }
 
 export default function UserProfile({ 
@@ -27,7 +28,8 @@ export default function UserProfile({
   onPostClick, 
   onVote, 
   onSubredditClick,
-  onMediaClick
+  onMediaClick,
+  onRedditLinkClick
 }: UserProfileProps) {
   const [profile, setProfile] = useState<any>(null);
   const [posts, setPosts] = useState<RedditPost[]>([]);
@@ -153,7 +155,7 @@ export default function UserProfile({
             <ArrowLeft size={24} />
             <Ripple />
           </button>
-          <h2 className="font-display font-medium text-xl text-text-primary">u/{username}</h2>
+          <h2 className="font-display font-medium text-xl text-text-primary">{username}</h2>
         </div>
         <div className="flex items-center gap-2">
           <button 
@@ -185,7 +187,7 @@ export default function UserProfile({
               )}
             </div>
             <div className="flex flex-col gap-1">
-              <h1 className="text-2xl md:text-3xl font-display font-bold text-text-primary tracking-tight">u/{username}</h1>
+              <h1 className="text-2xl md:text-3xl font-display font-bold text-text-primary tracking-tight">{username}</h1>
               <div className="flex flex-wrap gap-4 text-sm font-medium mt-1">
                 <div className="flex items-center gap-1.5 bg-secondary-container text-on-secondary-container px-3 py-1.5 rounded-full">
                   <Award size={16} className="text-primary" />
@@ -223,6 +225,7 @@ export default function UserProfile({
                   onVote={onVote}
                   onSubredditClick={onSubredditClick}
                   onMediaClick={onMediaClick}
+                  onRedditLinkClick={onRedditLinkClick}
                 />
               ))}
               

@@ -3,7 +3,7 @@
  * Usage: drop into PostDetail where gallery items are rendered
  */
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import { motion, useMotionValue, animate, PanInfo, useTransform } from 'motion/react';
 
 interface GalleryItem {
@@ -14,6 +14,7 @@ interface GalleryItem {
 interface MediaMetadata {
   [key: string]: {
     s: { u: string; x?: number; y?: number };
+    p?: { u: string; x: number; y: number }[];
     t?: string;
     id?: string;
     gif?: string;
@@ -27,12 +28,12 @@ interface M3ExpressiveCarouselProps {
   onMediaClick?: (index: number) => void;
 }
 
-const MAX_WIDTH = 320;
-const MIN_WIDTH = 140;
-const GAP = 12;
-const SCROLL_STEP = (MAX_WIDTH + MIN_WIDTH) / 2 + GAP; // 242
-const CARD_HEIGHT = 420;
-const PARALLAX_STRENGTH = 40;
+const L = 220;
+const M = 80;
+const S = 40;
+const G = 8;
+const STEP = L + G; // 228
+const CARD_HEIGHT = 380;
 
 function CarouselItem({
   item,
@@ -55,48 +56,50 @@ function CarouselItem({
   goTo: (index: number) => void;
   total: number;
 }) {
-  const cx = index * SCROLL_STEP;
+  const inputRange = [];
+  const widthRange = [];
+  const xRange = [];
 
-  // Distance from the center of the screen
-  const distance = useTransform(x, (latestX: number) => latestX + cx);
+  for (let k = -1; k <= total; k++) {
+    inputRange.push(k * STEP);
+    const d = index - k;
+    
+    let absX = 0;
+    if (d <= 0) {
+      widthRange.push(L);
+      absX = d * (L + G);
+    } else if (d === 1) {
+      widthRange.push(M);
+      absX = L + G;
+    } else {
+      widthRange.push(S);
+      absX = L + M + 2 * G + (d - 2) * (S + G);
+    }
+    xRange.push(absX + k * STEP);
+  }
 
-  const width = useTransform(
-    distance,
-    [-SCROLL_STEP, 0, SCROLL_STEP],
-    [MIN_WIDTH, MAX_WIDTH, MIN_WIDTH],
-    { clamp: true }
-  );
+  const scrollX = useTransform(x, (v: number) => -v);
+  const width = useTransform(scrollX, inputRange, widthRange, { clamp: false });
+  const leftPos = useTransform(scrollX, inputRange, xRange, { clamp: false });
 
-  const parallaxX = useTransform(
-    distance,
-    [-SCROLL_STEP, 0, SCROLL_STEP],
-    [-PARALLAX_STRENGTH, 0, PARALLAX_STRENGTH],
-    { clamp: true }
-  );
-
-  const opacity = useTransform(
-    distance,
-    [-2 * SCROLL_STEP, -SCROLL_STEP, 0, SCROLL_STEP, 2 * SCROLL_STEP],
-    [0, 1, 1, 1, 0],
-    { clamp: true }
-  );
+  const clipPath = useTransform(width, (w) => `inset(0px ${L - w}px 0px 0px round 24px)`);
+  const parallaxX = useTransform(width, (w) => -(L - w) / 2);
+  const badgeOpacity = useTransform(width, [L - 40, L], [0, 1]);
 
   const meta = mediaMetadata[item.media_id];
-  const mediaUrl = meta?.s?.u?.replace(/&amp;/g, '&') || '';
+  const preview = meta?.p?.find(p => p.x >= 640) || meta?.p?.[meta.p.length - 1];
+  const mediaUrl = (preview?.u || meta?.s?.u || '').replace(/&amp;/g, '&');
 
   return (
     <motion.div
       style={{
         position: 'absolute',
-        left: cx,
-        x: '-50%',
-        width,
+        left: leftPos,
+        width: L,
         height: CARD_HEIGHT,
-        opacity,
-        borderRadius: 24,
-        overflow: 'hidden',
+        clipPath,
+        WebkitClipPath: clipPath,
         cursor: 'pointer',
-        // Removed background color to meet requirements
       }}
       onClick={() => {
         if (index === activeIndex) {
@@ -111,8 +114,8 @@ function CarouselItem({
         style={{
           position: 'absolute',
           top: 0,
-          left: -PARALLAX_STRENGTH,
-          right: -PARALLAX_STRENGTH,
+          left: 0,
+          right: 0,
           bottom: 0,
           x: parallaxX,
         }}
@@ -136,17 +139,18 @@ function CarouselItem({
       </motion.div>
 
       {/* Subtle Scrim for Badge */}
-      <div className="absolute top-0 left-0 right-0 h-20 bg-gradient-to-b from-black/40 to-transparent pointer-events-none" />
+      <motion.div 
+        style={{ opacity: badgeOpacity }}
+        className="absolute top-0 left-0 right-0 h-20 bg-gradient-to-b from-black/40 to-transparent pointer-events-none" 
+      />
 
       {/* Index Badge */}
-      <div className="absolute top-3 right-3 bg-black/50 backdrop-blur-md text-white text-xs font-bold px-2.5 py-1 rounded-full pointer-events-none tracking-wide">
+      <motion.div 
+        style={{ opacity: badgeOpacity }}
+        className="absolute top-3 left-3 bg-black/50 backdrop-blur-md text-white text-xs font-bold px-2.5 py-1 rounded-full pointer-events-none tracking-wide"
+      >
         {index + 1} / {total}
-      </div>
-      
-      {/* Active Border */}
-      {index === activeIndex && (
-        <div className="absolute inset-0 rounded-[24px] border border-white/20 pointer-events-none" />
-      )}
+      </motion.div>
     </motion.div>
   );
 }
@@ -160,7 +164,7 @@ export default function M3ExpressiveCarousel({
   const [activeIndex, setActiveIndex] = useState(0);
   const x = useMotionValue(0);
 
-  const snapTo = useCallback((index: number) => -(index * SCROLL_STEP), []);
+  const snapTo = useCallback((index: number) => -(index * STEP), []);
 
   const goTo = useCallback(
     (index: number) => {
@@ -168,9 +172,9 @@ export default function M3ExpressiveCarousel({
       setActiveIndex(clamped);
       animate(x, snapTo(clamped), {
         type: 'spring',
-        stiffness: 300,
-        damping: 30,
-        mass: 0.8,
+        stiffness: 500,
+        damping: 35,
+        mass: 0.5,
       });
     },
     [items.length, snapTo, x]
@@ -178,24 +182,19 @@ export default function M3ExpressiveCarousel({
 
   const handleDragEnd = (_: unknown, info: PanInfo) => {
     const velocity = info.velocity.x;
-    const offset = info.offset.x;
-    
-    // Determine if the swipe was strong enough or far enough to change cards
-    if (velocity < -300 || offset < -(SCROLL_STEP / 3)) {
-      goTo(activeIndex + 1);
-    } else if (velocity > 300 || offset > SCROLL_STEP / 3) {
-      goTo(activeIndex - 1);
-    } else {
-      goTo(activeIndex);
-    }
+    const projectedX = x.get() + velocity * 0.2;
+    const projectedIndex = Math.round(-projectedX / STEP);
+    goTo(projectedIndex);
   };
+
+  if (!items || items.length === 0) return null;
 
   return (
     <div className="w-full overflow-hidden select-none py-4">
       <div className="relative w-full" style={{ height: CARD_HEIGHT }}>
         <motion.div
           className="absolute top-0 bottom-0 cursor-grab active:cursor-grabbing"
-          style={{ x, left: '50%' }}
+          style={{ x, left: 0, right: 0 }}
           drag="x"
           dragConstraints={{
             left: snapTo(items.length - 1),

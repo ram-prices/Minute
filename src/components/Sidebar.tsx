@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { Home, TrendingUp, Hash, Settings, LogIn, LogOut } from 'lucide-react';
+import { Home, TrendingUp, Hash, Settings, LogIn, LogOut, Mail } from 'lucide-react';
 import { Ripple } from './Ripple';
 import { decodeHtml } from '../lib/decode';
 
@@ -12,12 +12,14 @@ interface SidebarProps {
   currentSubreddit: string;
   onSubredditChange: (subreddit: string) => void;
   onSettingsClick: () => void;
+  onInboxClick: () => void;
   isLoggedIn: boolean;
   onLoginClick: () => void;
   onLogoutClick: () => void;
   mySubreddits: string[];
   redditClientId: string;
   currentUsername: string;
+  currentView: string;
 }
 
 const DEFAULT_SUBREDDITS = ['all', 'popular', 'gaming', 'technology', 'worldnews', 'science', 'movies'];
@@ -26,12 +28,14 @@ export default function Sidebar({
   currentSubreddit, 
   onSubredditChange, 
   onSettingsClick,
+  onInboxClick,
   isLoggedIn,
   onLoginClick,
   onLogoutClick,
   mySubreddits,
   redditClientId,
-  currentUsername
+  currentUsername,
+  currentView
 }: SidebarProps) {
   const subredditsToDisplay = isLoggedIn && mySubreddits.length > 0 ? mySubreddits : DEFAULT_SUBREDDITS;
 
@@ -50,21 +54,29 @@ export default function Sidebar({
           <NavItem 
             icon={<Home size={20} />} 
             label="Home" 
-            active={currentSubreddit === 'home'} 
+            active={currentView === 'feed' && currentSubreddit === 'home'} 
             onClick={() => onSubredditChange('home')} 
           />
           <NavItem 
             icon={<TrendingUp size={20} />} 
             label="Popular" 
-            active={currentSubreddit === 'popular'} 
+            active={currentView === 'feed' && currentSubreddit === 'popular'} 
             onClick={() => onSubredditChange('popular')} 
           />
           {!isLoggedIn && (
             <NavItem 
               icon={<Hash size={20} />} 
               label="All" 
-              active={currentSubreddit === 'all'} 
+              active={currentView === 'feed' && currentSubreddit === 'all'} 
               onClick={() => onSubredditChange('all')} 
+            />
+          )}
+          {isLoggedIn && (
+            <NavItem 
+              icon={<Mail size={20} />} 
+              label="Inbox" 
+              active={currentView === 'inbox'} 
+              onClick={onInboxClick} 
             />
           )}
         </div>
@@ -119,7 +131,7 @@ export default function Sidebar({
           </button>
           <div className="flex flex-col items-end gap-0.5">
             {isLoggedIn && currentUsername && (
-              <span className="text-[11px] font-bold text-text-primary truncate max-w-[80px]">u/{currentUsername}</span>
+              <span className="text-[11px] font-bold text-text-primary truncate max-w-[80px]">{currentUsername}</span>
             )}
             <div className="flex items-center gap-1.5">
               <div className="w-2 h-2 bg-green-500 rounded-full" />

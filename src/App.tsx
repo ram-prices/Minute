@@ -3,15 +3,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import Sidebar from './components/Sidebar';
 import PostCard from './components/PostCard';
 import PostDetail from './components/PostDetail';
 import VideoPlayer from './components/VideoPlayer';
 import UserProfile from './components/UserProfile';
+import Inbox from './components/Inbox';
 import { Ripple } from './components/Ripple';
-import { RedditPost, fetchSubreddit, fetchSubredditInfo, setRedditAuth, getAuthUrl, fetchMySubreddits, getStreamableId } from './services/reddit';
-import { Search, RefreshCw, Home, TrendingUp, Hash, Settings, X, Smartphone, Globe, LogIn, LogOut, Info, User, UserCircle, Trash2, ArrowLeft, Moon, ChevronDown } from 'lucide-react';
+import { RedditPost, fetchSubreddit, fetchSubredditInfo, setRedditAuth, getAuthUrl, fetchMySubreddits, getStreamableId, searchSubreddits, redditFetch } from './services/reddit';
+import { Search, RefreshCw, Home, TrendingUp, Hash, Settings, X, Smartphone, Globe, LogIn, LogOut, Info, User, UserCircle, Trash2, ArrowLeft, Moon, ChevronDown, Mail } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ReactPlayer from 'react-player';
 import { SquigglyLoader } from './components/SquigglyLoader';
@@ -19,7 +20,7 @@ import { getGifUrl, getProxiedMediaUrl } from './lib/media';
 import { decodeHtml } from './lib/decode';
 
 export default function App() {
-  const [view, setView] = useState<'feed' | 'settings' | 'profile' | 'browse'>('feed');
+  const [view, setView] = useState<'feed' | 'settings' | 'profile' | 'browse' | 'inbox'>('feed');
   const [postSort, setPostSort] = useState('hot');
   const [theme, setTheme] = useState<'system' | 'light' | 'dark'>(() => {
     return (localStorage.getItem('theme') as 'system' | 'light' | 'dark') || 'system';
@@ -48,7 +49,6 @@ export default function App() {
   const [fullViewMediaPost, setFullViewMediaPost] = useState<RedditPost | null>(null);
   const [galleryIndex, setGalleryIndex] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [after, setAfter] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [redditClientId, setRedditClientId] = useState(localStorage.getItem('reddit_client_id') || '');
@@ -302,27 +302,36 @@ export default function App() {
   }, [filteredUsers]);
 
   const loadPosts = useCallback(async (sub: string, sort: string, append = false) => {
-    if (!append) {
-      setLoading(true);
-      afterRef.current = null;
-      if (sub !== 'home' && sub !== 'all' && sub !== 'popular') {
-        fetchSubredditInfo(sub).then(setSubredditInfo);
-      } else {
-        setSubredditInfo(null);
-      }
+  if (!append) {
+    setLoading(true);
+    setPosts([]);
+    scrollPositionRef.current = 0;
+    if (feedContainerRef.current) {
+      feedContainerRef.current.scrollTop = 0;
     }
-    try {
-      const { posts: newPosts, after: newAfter } = await fetchSubreddit(sub, append ? afterRef.current || undefined : undefined, sort);
-      setPosts(prev => append ? [...prev, ...newPosts] : newPosts);
-      afterRef.current = newAfter;
-      setAfter(newAfter); // Still keep state for UI if needed, but use ref for logic
-    } catch (error) {
-      console.error('Failed to load posts', error);
-    } finally {
-      setLoading(false);
-      setIsRefreshing(false);
+    afterRef.current = null;
+    // Only fetch subreddit info on fresh loads, not on appends
+    if (sub !== 'home' && sub !== 'all' && sub !== 'popular') {
+      fetchSubredditInfo(sub).then(setSubredditInfo);
+    } else {
+      setSubredditInfo(null);
     }
-  }, []);
+  }
+  try {
+    const { posts: newPosts, after: newAfter } = await fetchSubreddit(
+      sub,
+      append ? afterRef.current ?? undefined : undefined,
+      sort
+    );
+    afterRef.current = newAfter;
+    setPosts(prev => append ? [...prev, ...newPosts] : newPosts);
+  } catch (error) {
+    console.error('Failed to load posts', error);
+  } finally {
+    setLoading(false);
+    setIsRefreshing(false);
+  }
+}, []);
 
   const loadMySubreddits = useCallback(async () => {
     if (isLoggedIn) {
@@ -338,49 +347,47 @@ export default function App() {
   }, [subreddit, postSort, loadPosts]);
 
   // Infinite Scroll Observer
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting && after && !loading && view === 'feed') {
-          loadPosts(subreddit, postSort, true);
-        }
-      },
-      { threshold: 0.1, rootMargin: '200px' }
-    );
+  
+useEffect(() => {
+  const observer = new IntersectionObserver(
+    (entries) => {
+      if (entries[0].isIntersecting && afterRef.current && !loading && view === 'feed') {
+        loadPosts(subreddit, postSort, true);
+      }
+    },
+    { threshold: 0.1, rootMargin: '200px' }
+  );
+  if (observerTarget.current) observer.observe(observerTarget.current);
+  return () => observer.disconnect();
+}, [loading, subreddit, postSort, loadPosts, view]); // removed `after` dep
 
-    if (observerTarget.current) {
-      observer.observe(observerTarget.current);
-    }
-
-    return () => observer.disconnect();
-  }, [after, loading, subreddit, postSort, loadPosts, view]);
 
   useEffect(() => {
     loadMySubreddits();
   }, [loadMySubreddits]);
 
   useEffect(() => {
-    const delayDebounceFn = setTimeout(async () => {
-      if (searchQuery.length >= 2) {
-        setIsSearching(true);
-        try {
-          const { searchSubreddits } = await import('./services/reddit');
-          const results = await searchSubreddits(searchQuery);
-          setSearchResults(results);
-          setShowSearchResults(true);
-        } catch (error) {
-          console.error('Search failed', error);
-        } finally {
-          setIsSearching(false);
-        }
-      } else {
-        setSearchResults([]);
-        setShowSearchResults(false);
+  const delayDebounceFn = setTimeout(async () => {
+    if (searchQuery.length >= 2) {
+      setIsSearching(true);
+      try {
+        // Use the already-imported searchSubreddits (static import at top of file)
+        const results = await searchSubreddits(searchQuery);
+        setSearchResults(results);
+        setShowSearchResults(true);
+      } catch (error) {
+        console.error('Search failed', error);
+      } finally {
+        setIsSearching(false);
       }
-    }, 500);
+    } else {
+      setSearchResults([]);
+      setShowSearchResults(false);
+    }
+  }, 500);
+  return () => clearTimeout(delayDebounceFn);
+}, [searchQuery]);
 
-    return () => clearTimeout(delayDebounceFn);
-  }, [searchQuery]);
 
   const handleRefresh = () => {
     setIsRefreshing(true);
@@ -494,10 +501,15 @@ export default function App() {
     setFilteredUsers(prev => [...new Set([...prev, user.toLowerCase()])]);
   };
 
-  const visiblePosts = posts.filter(post => 
-    !filteredSubreddits.includes(post.subreddit.toLowerCase()) && 
-    !filteredUsers.includes(post.author.toLowerCase())
-  );
+  const visiblePosts = useMemo(
+  () =>
+    posts.filter(
+      post =>
+        !filteredSubreddits.includes(post.subreddit.toLowerCase()) &&
+        !filteredUsers.includes(post.author.toLowerCase())
+    ),
+  [posts, filteredSubreddits, filteredUsers]
+);
 
   const handleRedditLogout = async () => {
     const { setRedditAuth } = await import('./services/reddit');
@@ -601,7 +613,7 @@ export default function App() {
       setSubredditHistory(prev => [...prev, subreddit]);
       setSubreddit(newSub);
       setView('feed');
-      setAfter(null);
+      afterRef.current = null;
       setPosts([]);
       setShowSubreddits(false);
       scrollPositionRef.current = 0;
@@ -623,7 +635,7 @@ export default function App() {
       const prevSub = subredditHistory[subredditHistory.length - 1];
       setSubredditHistory(prev => prev.slice(0, -1));
       setSubreddit(prevSub);
-      setAfter(null);
+      afterRef.current = null;
       setPosts([]);
       scrollPositionRef.current = 0;
       feedContainerRef.current?.scrollTo(0, 0);
@@ -647,6 +659,106 @@ export default function App() {
     const { submitComment } = await import('./services/reddit');
     return await submitComment(parentId, text);
   };
+const handlePostClick = useCallback((post: RedditPost) => {
+  scrollPositionRef.current = feedContainerRef.current?.scrollTop || 0;
+  setSelectedPost(post);
+}, []);
+
+const handleUserClick = useCallback((user: string) => {
+  scrollPositionRef.current = feedContainerRef.current?.scrollTop || 0;
+  setSelectedUser(user);
+  setView('profile');
+}, []);
+
+const handleRedditLinkClick = useCallback((url: string) => {
+  try {
+    const parsedUrl = new URL(url, window.location.origin);
+    const path = parsedUrl.pathname;
+
+    // Handle /r/subreddit
+    const subredditMatch = path.match(/^\/r\/([^/]+)\/?$/);
+    if (subredditMatch) {
+      handleSubredditChange(subredditMatch[1]);
+      return;
+    }
+
+    // Handle /u/user or /user/user
+    const userMatch = path.match(/^\/(?:u|user)\/([^/]+)\/?$/);
+    if (userMatch) {
+      handleUserClick(userMatch[1]);
+      return;
+    }
+
+    // Handle /r/subreddit/comments/id/title
+    const postMatch = path.match(/^\/r\/([^/]+)\/comments\/([^/]+)\/([^/]*)\/?$/);
+    // Handle /r/subreddit/comments/id/title/commentId
+    const commentMatch = path.match(/^\/r\/([^/]+)\/comments\/([^/]+)\/([^/]*)\/([^/]+)\/?$/);
+    // Handle shortlinks like /r/DotA2/s/qidd5d2hMU
+    const shortMatch = path.match(/^\/r\/([^/]+)\/s\/([^/]+)\/?$/);
+    // Handle redd.it shortlinks and reddit.com/id shortlinks
+    const isReddIt = parsedUrl.hostname === 'redd.it';
+    const isRedditComShort = (parsedUrl.hostname === 'reddit.com' || parsedUrl.hostname === 'www.reddit.com') && path.match(/^\/[a-zA-Z0-9]+\/?$/);
+
+    if (postMatch || commentMatch || shortMatch || isReddIt || isRedditComShort) {
+      const fetchPost = async () => {
+        try {
+          let fetchUrl = '';
+          if (isReddIt || isRedditComShort) {
+            const id = path.replace(/\//g, '');
+            fetchUrl = `https://www.reddit.com/api/info.json?id=t3_${id}`;
+          } else {
+            const cleanPath = path.endsWith('/') ? path.slice(0, -1) : path;
+            fetchUrl = `https://www.reddit.com${cleanPath}.json`;
+          }
+          const response = await redditFetch(fetchUrl);
+          let data;
+          try {
+            data = await response.json();
+          } catch (jsonError) {
+            // If JSON parsing fails, it might be because the shortlink redirected to an HTML page.
+            // Check if the final URL is different and looks like a post URL.
+            if (response.url && response.url !== fetchUrl) {
+              const finalUrl = new URL(response.url);
+              if (
+                finalUrl.pathname.match(/^\/r\/([^/]+)\/comments\/([^/]+)\/([^/]*)\/?$/) ||
+                finalUrl.pathname.match(/^\/r\/([^/]+)\/comments\/([^/]+)\/([^/]*)\/([^/]+)\/?$/)
+              ) {
+                // Recursively handle the resolved URL
+                handleRedditLinkClick(response.url);
+                return;
+              }
+            }
+            throw jsonError;
+          }
+          
+          // /api/info returns { data: { children: [...] } }
+          // regular post returns [{ data: { children: [...] } }, ...]
+          const children = (isReddIt || isRedditComShort)
+            ? data?.data?.children 
+            : data?.[0]?.data?.children;
+
+          if (children && children[0]) {
+            const postData = children[0].data;
+            handlePostClick(postData);
+          } else {
+            window.open(url, '_blank');
+          }
+        } catch (e) {
+          console.error("Failed to fetch post from link", e);
+          window.open(url, '_blank');
+        }
+      };
+      fetchPost();
+      return;
+    }
+
+    // Fallback for other reddit links
+    window.open(url, '_blank');
+  } catch (e) {
+    console.error("Invalid URL", e);
+    window.open(url, '_blank');
+  }
+}, [handleSubredditChange, handleUserClick, handlePostClick]);
 
   return (
     <ErrorBoundary>
@@ -661,12 +773,17 @@ export default function App() {
             if (view === 'feed') scrollPositionRef.current = feedContainerRef.current?.scrollTop || 0;
             setView('settings');
           }}
+          onInboxClick={() => {
+            if (view === 'feed') scrollPositionRef.current = feedContainerRef.current?.scrollTop || 0;
+            setView('inbox');
+          }}
           isLoggedIn={isLoggedIn}
           onLoginClick={handleRedditLogin}
           onLogoutClick={handleRedditLogout}
           mySubreddits={mySubreddits}
           redditClientId={redditClientId}
           currentUsername={currentUsername}
+          currentView={view}
         />
       </div>
 
@@ -780,11 +897,28 @@ export default function App() {
                     className="flex items-center justify-between w-full"
                   >
                     <div className="flex items-center gap-3">
-                      <div className="md:hidden w-10 h-10 bg-primary rounded-xl flex items-center justify-center shrink-0">
-                        <div className="w-4 h-4 bg-on-primary rounded-full" />
+                      <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center shrink-0 overflow-hidden">
+                        {subreddit === 'home' ? (
+                          <Home size={20} className="text-on-primary" />
+                        ) : subreddit === 'popular' ? (
+                          <TrendingUp size={20} className="text-on-primary" />
+                        ) : subreddit === 'all' ? (
+                          <Globe size={20} className="text-on-primary" />
+                        ) : subredditInfo && (subredditInfo.icon_img || subredditInfo.community_icon) ? (
+                          <img 
+                            src={(subredditInfo.icon_img || subredditInfo.community_icon).split('?')[0]} 
+                            alt="" 
+                            className="w-full h-full object-cover"
+                            referrerPolicy="no-referrer"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-lg font-display font-bold text-on-primary">
+                            {subreddit.charAt(0).toUpperCase()}
+                          </div>
+                        )}
                       </div>
                       <h1 className="text-xl md:text-2xl font-display font-medium tracking-tight truncate max-w-[150px] md:max-w-none text-text-primary">
-                        {subreddit === 'home' ? 'Home' : `r/${subreddit}`}
+                        {subreddit === 'home' ? 'Home' : subreddit === 'popular' ? 'Popular' : subreddit === 'all' ? 'All' : `r/${subreddit}`}
                       </h1>
                     </div>
 
@@ -971,28 +1105,20 @@ export default function App() {
                     </div>
                   )}
                   {visiblePosts.map((post, idx) => (
-                    <PostCard 
-                      key={`${post.id}-${idx}`} 
-                      post={post} 
-                      hideSubredditInfo={subreddit !== 'home' && subreddit !== 'all' && subreddit !== 'popular'}
-                      onClick={(post) => {
-                        scrollPositionRef.current = feedContainerRef.current?.scrollTop || 0;
-                        setSelectedPost(post);
-                      }} 
-                      onVote={handleVote}
-                      onSubredditClick={(sr) => {
-                        handleSubredditChange(sr);
-                      }}
-                      onUserClick={(user) => {
-                        scrollPositionRef.current = feedContainerRef.current?.scrollTop || 0;
-                        setSelectedUser(user);
-                        setView('profile');
-                      }}
-                      onMediaClick={handleMediaClick}
-                      onFilterSubreddit={handleFilterSubreddit}
-                      onFilterUser={handleFilterUser}
-                    />
-                  ))}
+  <PostCard 
+    key={`${post.id}-${idx}`} 
+    post={post} 
+    hideSubredditInfo={subreddit !== 'home' && subreddit !== 'all' && subreddit !== 'popular'}
+    onClick={handlePostClick}
+    onVote={handleVote}
+    onSubredditClick={handleSubredditChange}
+    onUserClick={handleUserClick}
+    onMediaClick={handleMediaClick}
+    onFilterSubreddit={handleFilterSubreddit}
+    onFilterUser={handleFilterUser}
+    onRedditLinkClick={handleRedditLinkClick}
+  />
+))}
                   
                   {/* Infinite Scroll Target */}
                   <div ref={observerTarget} className="h-20 flex items-center justify-center">
@@ -1215,7 +1341,7 @@ export default function App() {
                           <div className="flex items-center gap-3">
                             <div className={`w-2.5 h-2.5 rounded-full ${acc.username === currentUsername ? 'bg-green-500' : 'bg-bg-tertiary'}`} />
                             <div className="flex flex-col">
-                              <span className="text-base font-bold text-text-primary">u/{acc.username}</span>
+                              <span className="text-base font-bold text-text-primary">{acc.username}</span>
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
@@ -1325,6 +1451,7 @@ export default function App() {
               onVote={handleVote}
               onSubredditClick={handleSubredditChange}
               onMediaClick={handleMediaClick}
+              onRedditLinkClick={handleRedditLinkClick}
             />
           </motion.main>
         )}
@@ -1360,8 +1487,17 @@ export default function App() {
               onFilterSubreddit={handleFilterSubreddit}
               onFilterUser={handleFilterUser}
               onMediaClick={handleMediaClick}
+              onRedditLinkClick={handleRedditLinkClick}
             />
           </motion.main>
+        )}
+
+        {view === 'inbox' && !selectedPost && (
+          <Inbox 
+            onClose={closeView}
+            onUserClick={handleUserClick}
+            onRedditLinkClick={handleRedditLinkClick}
+          />
         )}
       </AnimatePresence>
       </div>
@@ -1382,6 +1518,12 @@ export default function App() {
               if (view === 'feed') scrollPositionRef.current = feedContainerRef.current?.scrollTop || 0;
               setView('browse');
             }} />
+            {isLoggedIn && (
+              <MobileNavItem icon={<Mail size={20} />} label="Inbox" active={view === 'inbox'} onClick={() => {
+                if (view === 'feed') scrollPositionRef.current = feedContainerRef.current?.scrollTop || 0;
+                setView('inbox');
+              }} />
+            )}
             <MobileNavItem icon={<Settings size={20} />} label="Settings" active={view === 'settings'} onClick={() => {
               if (view === 'feed') scrollPositionRef.current = feedContainerRef.current?.scrollTop || 0;
               setView('settings');
