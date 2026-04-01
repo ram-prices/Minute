@@ -18,6 +18,9 @@ import ReactPlayer from 'react-player';
 import { SquigglyLoader } from './components/SquigglyLoader';
 import { getGifUrl, getProxiedMediaUrl } from './lib/media';
 import { decodeHtml } from './lib/decode';
+import { App as CapApp } from '@capacitor/app';
+import { Capacitor } from '@capacitor/core';
+import { StatusBar, Style } from '@capacitor/status-bar';
 
 export default function App() {
   const [view, setView] = useState<'feed' | 'settings' | 'profile' | 'browse' | 'inbox'>('feed');
@@ -51,6 +54,13 @@ export default function App() {
         document.head.appendChild(metaThemeColor);
       }
       metaThemeColor.setAttribute('content', bgColor);
+
+      // Update Capacitor StatusBar if native
+      if (Capacitor.isNativePlatform()) {
+        StatusBar.setBackgroundColor({ color: bgColor }).catch(console.error);
+        StatusBar.setStyle({ style: isDark ? Style.Dark : Style.Light }).catch(console.error);
+        StatusBar.setOverlaysWebView({ overlay: false }).catch(console.error);
+      }
     }, 10);
   }, [theme]);
   const [subreddit, setSubreddit] = useState(localStorage.getItem('reddit_access_token') ? 'home' : 'all');
@@ -404,76 +414,102 @@ useEffect(() => {
     });
   }, [isLoggedIn, showSettings]);
 
-  const handleMessage = useCallback(async (event: MessageEvent) => {
-    // Validate origin is from AI Studio preview or localhost
-    const origin = event.origin;
-    if (!origin.endsWith('.run.app') && !origin.includes('localhost')) {
-      return;
-    }
+  const handleAuthData = useCallback(async (hash: string, search: string) => {
+    const { setRedditAuth, fetchMe, exchangeCodeForTokens } = await import('./services/reddit');
     
-    if (event.data?.type === 'OAUTH_AUTH_SUCCESS') {
-      const { hash, search } = event.data;
-      const { setRedditAuth, fetchMe, exchangeCodeForTokens } = await import('./services/reddit');
-      
-      let tokenData: any = null;
+    let tokenData: any = null;
 
-      // Handle Implicit Grant (hash) - fallback
-      if (hash && hash.includes('access_token')) {
-        const params = new URLSearchParams(hash.substring(1));
-        const token = params.get('access_token');
-        const state = params.get('state');
-        const savedState = localStorage.getItem('reddit_auth_state');
+    // Handle Implicit Grant (hash) - fallback
+    if (hash && hash.includes('access_token')) {
+      const params = new URLSearchParams(hash.startsWith('#') ? hash.substring(1) : hash);
+      const token = params.get('access_token');
+      const state = params.get('state');
+      const savedState = localStorage.getItem('reddit_auth_state');
 
-        if (token && state === savedState) {
-          tokenData = {
-            access_token: token,
-            expires_in: params.get('expires_in') ? parseInt(params.get('expires_in')!) : null,
-            refresh_token: null
-          };
-        }
-      } 
-      // Handle Authorization Code (search) - preferred for long-lived sessions
-      else if (search) {
-        const params = new URLSearchParams(search);
-        const code = params.get('code');
-        const state = params.get('state');
-        const savedState = localStorage.getItem('reddit_auth_state');
+      if (token && state === savedState) {
+        tokenData = {
+          access_token: token,
+          expires_in: params.get('expires_in') ? parseInt(params.get('expires_in')!) : null,
+          refresh_token: null
+        };
+      }
+    } 
+    // Handle Authorization Code (search) - preferred for long-lived sessions
+    else if (search) {
+      const params = new URLSearchParams(search.startsWith('?') ? search.substring(1) : search);
+      const code = params.get('code');
+      const state = params.get('state');
+      const savedState = localStorage.getItem('reddit_auth_state');
 
-        if (code && state === savedState) {
-          const redirectUri = `${window.location.origin}/auth/callback`;
-          try {
-            tokenData = await exchangeCodeForTokens(code, redditClientId, redirectUri);
-          } catch (error) {
-            console.error('Failed to exchange code', error);
-            alert('Failed to login with Reddit. Please try again.');
-          }
+      if (code && state === savedState) {
+        const redirectUri = `${window.location.origin}/auth/callback`;
+        try {
+          tokenData = await exchangeCodeForTokens(code, redditClientId, redirectUri);
+        } catch (error) {
+          console.error('Failed to exchange code', error);
+          alert('Failed to login with Reddit. Please try again.');
         }
       }
+    }
 
-      if (tokenData) {
-        // Temporarily set auth to fetch profile
-        setRedditAuth(tokenData.access_token, redditClientId, tokenData.refresh_token, tokenData.expires_in);
-        const profile = await fetchMe();
-        if (profile) {
-          setRedditAuth(tokenData.access_token, redditClientId, tokenData.refresh_token, tokenData.expires_in, profile.name);
-          setIsLoggedIn(true);
-          setCurrentUsername(profile.name);
-          setSubreddit('home');
-          loadPosts('home', postSort);
-          setShowSettings(false);
-          const { getAccounts } = await import('./services/reddit');
-          setAccounts(getAccounts());
-        } else {
-          alert('Failed to fetch Reddit profile. Please try again.');
-        }
+    if (tokenData) {
+      // Temporarily set auth to fetch profile
+      setRedditAuth(tokenData.access_token, redditClientId, tokenData.refresh_token, tokenData.expires_in);
+      const profile = await fetchMe();
+      if (profile) {
+        setRedditAuth(tokenData.access_token, redditClientId, tokenData.refresh_token, tokenData.expires_in, profile.name);
+        setIsLoggedIn(true);
+        setCurrentUsername(profile.name);
+        setSubreddit('home');
+        loadPosts('home', postSort);
+        setShowSettings(false);
+        const { getAccounts } = await import('./services/reddit');
+        setAccounts(getAccounts());
+      } else {
+        alert('Failed to fetch Reddit profile. Please try again.');
       }
     }
   }, [redditClientId, loadPosts, postSort]);
 
   useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      // Validate origin is from AI Studio preview or localhost
+      const origin = event.origin;
+      if (!origin.endsWith('.run.app') && !origin.includes('localhost')) {
+        return;
+      }
+      
+      if (event.data?.type === 'OAUTH_AUTH_SUCCESS') {
+        const { hash, search } = event.data;
+        handleAuthData(hash, search);
+      }
+    };
+
     window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
-  }, [handleMessage]);
+    
+    let capListener: Promise<any> | null = null;
+
+    // Capacitor Deep Link Listener (Native Only)
+    if (Capacitor.isNativePlatform()) {
+      capListener = CapApp.addListener('appUrlOpen', (data) => {
+        try {
+          const url = new URL(data.url);
+          // Deep links usually come in as myapp://callback?code=...
+          // We can treat the search and hash from this URL
+          handleAuthData(url.hash, url.search);
+        } catch (e) {
+          console.error('Failed to parse Capacitor deep link URL', e);
+        }
+      });
+    }
+
+    return () => {
+      window.removeEventListener('message', handleMessage);
+      if (capListener) {
+        capListener.then(l => l.remove());
+      }
+    };
+  }, [handleAuthData]);
 
   const handleRedditLogin = () => {
     if (!redditClientId) {
