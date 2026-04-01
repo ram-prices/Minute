@@ -30,15 +30,28 @@ export default function App() {
     localStorage.setItem('theme', theme);
     const root = document.documentElement;
     root.classList.remove('light', 'dark');
+    
+    const isDark = theme === 'system' 
+      ? window.matchMedia('(prefers-color-scheme: dark)').matches 
+      : theme === 'dark';
+      
     if (theme !== 'system') {
       root.classList.add(theme);
     } else {
-      if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-        root.classList.add('dark');
-      } else {
-        root.classList.add('light');
-      }
+      root.classList.add(isDark ? 'dark' : 'light');
     }
+
+    // Update theme-color meta tag with actual hex color (Chrome Android doesn't support CSS variables here)
+    setTimeout(() => {
+      const bgColor = getComputedStyle(root).getPropertyValue('--md-sys-color-surface').trim() || (isDark ? '#2A2A2A' : '#FCFBF7');
+      let metaThemeColor = document.querySelector('meta[name="theme-color"]');
+      if (!metaThemeColor) {
+        metaThemeColor = document.createElement('meta');
+        metaThemeColor.setAttribute('name', 'theme-color');
+        document.head.appendChild(metaThemeColor);
+      }
+      metaThemeColor.setAttribute('content', bgColor);
+    }, 10);
   }, [theme]);
   const [subreddit, setSubreddit] = useState(localStorage.getItem('reddit_access_token') ? 'home' : 'all');
   const [subredditInfo, setSubredditInfo] = useState<any>(null);
@@ -157,17 +170,6 @@ export default function App() {
   useEffect(() => {
     const root = document.documentElement;
     
-    // Set theme color for mobile browser UI
-    const metaThemeColor = document.querySelector('meta[name="theme-color"]');
-    if (metaThemeColor) {
-      metaThemeColor.setAttribute('content', 'var(--md-sys-color-surface)');
-    } else {
-      const meta = document.createElement('meta');
-      meta.name = 'theme-color';
-      meta.content = 'var(--md-sys-color-surface)';
-      document.head.appendChild(meta);
-    }
-
     // Set accent color for Material You feel
     root.style.setProperty('accent-color', 'var(--md-sys-color-primary)');
   }, []);
@@ -815,7 +817,7 @@ const handleRedditLinkClick = useCallback((url: string) => {
               initial={false}
               animate={{ y: showHeader ? 0 : -80 }}
               transition={{ duration: 0.3, ease: [0.2, 0, 0, 1] }}
-              className="sticky top-0 z-40 bg-bg-primary/90 backdrop-blur-md px-4 flex items-center justify-between h-16 md:h-20 md:px-8 shrink-0"
+              className="sticky top-0 z-40 bg-bg-primary/90 backdrop-blur-md px-4 flex items-center justify-between min-h-16 md:min-h-20 pb-2 md:px-8 shrink-0 safe-top"
             >
               <AnimatePresence mode="popLayout">
                 {isSearchExpanded ? (
@@ -1250,7 +1252,7 @@ const handleRedditLinkClick = useCallback((url: string) => {
               initial={false}
               animate={{ y: showHeader ? 0 : -64 }}
               transition={{ duration: 0.3, ease: [0.2, 0, 0, 1] }}
-              className="sticky top-0 z-40 bg-bg-primary/90 backdrop-blur-md px-4 h-16 md:px-8 flex items-center justify-between shrink-0"
+              className="sticky top-0 z-40 bg-bg-primary/90 backdrop-blur-md px-4 min-h-16 pb-2 md:px-8 flex items-center justify-between shrink-0 safe-top"
             >
               <div className="flex items-center gap-4">
                 <button onClick={closeView} className="relative p-2 -ml-2 text-text-secondary hover:text-text-primary hover:bg-hover-bg rounded-full transition-all active:scale-90 overflow-hidden">
@@ -1604,7 +1606,7 @@ const handleRedditLinkClick = useCallback((url: string) => {
               className="relative w-full h-full flex items-center justify-center cursor-grab active:cursor-grabbing"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="absolute top-6 right-6 flex items-center gap-3 z-10">
+              <div className="absolute right-6 flex items-center gap-3 z-10" style={{ top: 'max(1.5rem, env(safe-area-inset-top))' }}>
                 <a 
                   href={fullViewMediaPost.url} 
                   target="_blank" 

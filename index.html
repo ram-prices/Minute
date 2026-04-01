@@ -10,7 +10,7 @@
       const updateThemeColor = () => {
         const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
         const metaThemeColor = document.querySelector('meta[name="theme-color"]');
-        metaThemeColor.setAttribute('content', isDark ? '#030303' : '#ffffff');
+        metaThemeColor.setAttribute('content', isDark ? '#2A2A2A' : '#FCFBF7');
       };
       window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', updateThemeColor);
       updateThemeColor();

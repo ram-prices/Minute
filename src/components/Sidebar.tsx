@@ -40,7 +40,7 @@ export default function Sidebar({
   const subredditsToDisplay = isLoggedIn && mySubreddits.length > 0 ? mySubreddits : DEFAULT_SUBREDDITS;
 
   return (
-    <div className="w-72 h-screen bg-bg-secondary p-4 flex flex-col gap-4 sticky top-0">
+    <div className="w-72 h-screen bg-bg-secondary p-4 flex flex-col gap-4 sticky top-0 safe-top safe-bottom">
       <div className="flex items-center gap-3 px-4 mt-1 mb-2">
         <div className="w-8 h-8 bg-primary rounded-xl flex items-center justify-center">
           <div className="w-3 h-3 bg-on-primary rounded-full" />
