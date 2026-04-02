@@ -851,7 +851,7 @@ const handleRedditLinkClick = useCallback((url: string) => {
             {/* Top App Bar */}
             <motion.header 
               initial={false}
-              animate={{ y: showHeader ? 0 : -80 }}
+              animate={{ y: showHeader ? 0 : '-100%' }}
               transition={{ duration: 0.3, ease: [0.2, 0, 0, 1] }}
               className="sticky top-0 z-40 bg-bg-primary/90 backdrop-blur-md px-4 flex items-center justify-between min-h-16 md:min-h-20 pb-2 md:px-8 shrink-0 safe-top"
             >
@@ -1286,7 +1286,7 @@ const handleRedditLinkClick = useCallback((url: string) => {
           >
             <motion.header 
               initial={false}
-              animate={{ y: showHeader ? 0 : -64 }}
+              animate={{ y: showHeader ? 0 : '-100%' }}
               transition={{ duration: 0.3, ease: [0.2, 0, 0, 1] }}
               className="sticky top-0 z-40 bg-bg-primary/90 backdrop-blur-md px-4 min-h-16 pb-2 md:px-8 flex items-center justify-between shrink-0 safe-top"
             >

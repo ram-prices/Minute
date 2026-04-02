@@ -3,7 +3,7 @@
  * Usage: drop into PostDetail where gallery items are rendered
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { motion, useMotionValue, animate, PanInfo, useTransform } from 'motion/react';
 
 interface GalleryItem {
@@ -28,11 +28,7 @@ interface M3ExpressiveCarouselProps {
   onMediaClick?: (index: number) => void;
 }
 
-const L = 220;
-const M = 80;
-const S = 40;
 const G = 8;
-const STEP = L + G; // 228
 const CARD_HEIGHT = 380;
 
 function CarouselItem({
@@ -45,6 +41,10 @@ function CarouselItem({
   activeIndex,
   goTo,
   total,
+  L,
+  M,
+  S,
+  STEP,
 }: {
   item: GalleryItem;
   index: number;
@@ -55,26 +55,54 @@ function CarouselItem({
   activeIndex: number;
   goTo: (index: number) => void;
   total: number;
+  L: number;
+  M: number;
+  S: number;
+  STEP: number;
 }) {
   const inputRange = [];
   const widthRange = [];
   const xRange = [];
 
+  const maxBaseK = Math.max(0, total - 3);
+
   for (let k = -1; k <= total; k++) {
     inputRange.push(k * STEP);
-    const d = index - k;
     
+    let base_k = Math.min(k, maxBaseK);
+    let shift = Math.max(0, k - base_k);
+    
+    let w0, w1, w2;
+    if (shift === 0) { w0 = L; w1 = M; w2 = S; }
+    else if (shift === 1) { w0 = M; w1 = L; w2 = S; }
+    else if (shift === 2) { w0 = S; w1 = M; w2 = L; }
+    else { w0 = S; w1 = M; w2 = L; }
+
+    let pos0 = 0;
+    let pos1 = w0 + G;
+    let pos2 = w0 + w1 + 2 * G;
+
+    let w = 0;
     let absX = 0;
-    if (d <= 0) {
-      widthRange.push(L);
-      absX = d * (L + G);
-    } else if (d === 1) {
-      widthRange.push(M);
-      absX = L + G;
+
+    if (index < base_k) {
+      w = L;
+      absX = (index - base_k) * (L + G);
+    } else if (index === base_k) {
+      w = w0;
+      absX = pos0;
+    } else if (index === base_k + 1) {
+      w = w1;
+      absX = pos1;
+    } else if (index === base_k + 2) {
+      w = w2;
+      absX = pos2;
     } else {
-      widthRange.push(S);
-      absX = L + M + 2 * G + (d - 2) * (S + G);
+      w = 0;
+      absX = pos2 + w2 + G + (index - (base_k + 3)) * (S + G);
     }
+
+    widthRange.push(w);
     xRange.push(absX + k * STEP);
   }
 
@@ -163,8 +191,43 @@ export default function M3ExpressiveCarousel({
 }: M3ExpressiveCarouselProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const x = useMotionValue(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(0);
 
-  const snapTo = useCallback((index: number) => -(index * STEP), []);
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const observer = new ResizeObserver((entries) => {
+      setContainerWidth(entries[0].contentRect.width);
+    });
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, []);
+
+  let L = 0, M = 0, S = 0, STEP = 0;
+  if (containerWidth > 0) {
+    if (items.length === 1) {
+      L = containerWidth;
+      M = 0;
+      S = 0;
+      STEP = L + G;
+    } else if (items.length === 2) {
+      const available = containerWidth - G;
+      L = Math.floor(available * 0.75);
+      M = available - L;
+      S = 0;
+      STEP = L + G;
+    } else {
+      const available = containerWidth - 2 * G;
+      L = Math.floor(available * 0.647);
+      M = Math.floor(available * 0.235);
+      S = available - L - M;
+      STEP = L + G;
+    }
+  }
+
+  const snapTo = useCallback((index: number) => {
+    return -(index * STEP);
+  }, [STEP]);
 
   const goTo = useCallback(
     (index: number) => {
@@ -190,35 +253,41 @@ export default function M3ExpressiveCarousel({
   if (!items || items.length === 0) return null;
 
   return (
-    <div className="w-full overflow-hidden select-none py-4">
-      <div className="relative w-full" style={{ height: CARD_HEIGHT }}>
-        <motion.div
-          className="absolute top-0 bottom-0 cursor-grab active:cursor-grabbing"
-          style={{ x, left: 0, right: 0 }}
-          drag="x"
-          dragConstraints={{
-            left: snapTo(items.length - 1),
-            right: 0,
-          }}
-          dragElastic={0.15}
-          onDragEnd={handleDragEnd}
-        >
-          {items.map((item, index) => (
-            <CarouselItem
-              key={item.media_id}
-              item={item}
-              index={index}
-              x={x}
-              mediaMetadata={mediaMetadata}
-              title={title}
-              onMediaClick={onMediaClick}
-              activeIndex={activeIndex}
-              goTo={goTo}
-              total={items.length}
-            />
-          ))}
-        </motion.div>
-      </div>
+    <div className="w-full overflow-hidden select-none py-4" ref={containerRef}>
+      {containerWidth > 0 && (
+        <div className="relative w-full" style={{ height: CARD_HEIGHT }}>
+          <motion.div
+            className="absolute top-0 bottom-0 cursor-grab active:cursor-grabbing"
+            style={{ x, left: 0, right: 0 }}
+            drag="x"
+            dragConstraints={{
+              left: snapTo(items.length - 1),
+              right: 0,
+            }}
+            dragElastic={0.15}
+            onDragEnd={handleDragEnd}
+          >
+            {items.map((item, index) => (
+              <CarouselItem
+                key={item.media_id}
+                item={item}
+                index={index}
+                x={x}
+                mediaMetadata={mediaMetadata}
+                title={title}
+                onMediaClick={onMediaClick}
+                activeIndex={activeIndex}
+                goTo={goTo}
+                total={items.length}
+                L={L}
+                M={M}
+                S={S}
+                STEP={STEP}
+              />
+            ))}
+          </motion.div>
+        </div>
+      )}
 
       {/* Pill-dot indicators */}
       <div className="flex justify-center items-center gap-1.5 mt-4">

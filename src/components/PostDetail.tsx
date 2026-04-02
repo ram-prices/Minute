@@ -299,7 +299,7 @@ export default function PostDetail({
     <div className="h-full flex flex-col bg-bg-primary relative">
       <motion.header 
         initial={false}
-        animate={{ y: showHeader ? 0 : -100 }}
+        animate={{ y: showHeader ? 0 : '-100%' }}
         transition={{ duration: 0.3, ease: [0.2, 0, 0, 1] }}
         className="absolute top-0 left-0 right-0 bg-bg-secondary/90 backdrop-blur-md px-4 pb-4 md:px-6 flex items-center justify-between z-20 safe-top"
       >
