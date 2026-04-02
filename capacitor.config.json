@@ -2,5 +2,8 @@
   "appId": "com.minute.app",
   "appName": "Minute",
   "webDir": "dist",
-  "bundledWebRuntime": false
+  "bundledWebRuntime": false,
+  "plugins": {
+    "App": {}
+  }
 }

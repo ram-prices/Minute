@@ -57,9 +57,8 @@ export default function App() {
 
       // Update Capacitor StatusBar if native
       if (Capacitor.isNativePlatform()) {
-        StatusBar.setBackgroundColor({ color: bgColor }).catch(console.error);
         StatusBar.setStyle({ style: isDark ? Style.Dark : Style.Light }).catch(console.error);
-        StatusBar.setOverlaysWebView({ overlay: false }).catch(console.error);
+        StatusBar.setOverlaysWebView({ overlay: true }).catch(console.error);
       }
     }, 10);
   }, [theme]);
@@ -442,7 +441,7 @@ useEffect(() => {
       const savedState = localStorage.getItem('reddit_auth_state');
 
       if (code && state === savedState) {
-        const redirectUri = `${window.location.origin}/auth/callback`;
+        const redirectUri = Capacitor.isNativePlatform() ? 'com.minute.app://auth/callback' : `${window.location.origin}/auth/callback`;
         try {
           tokenData = await exchangeCodeForTokens(code, redditClientId, redirectUri);
         } catch (error) {
@@ -517,9 +516,16 @@ useEffect(() => {
       setShowSettings(true);
       return;
     }
-    const redirectUri = `${window.location.origin}/auth/callback`;
+    const redirectUri = Capacitor.isNativePlatform() ? 'com.minute.app://auth/callback' : `${window.location.origin}/auth/callback`;
     const authUrl = getAuthUrl(redditClientId, redirectUri);
     
+    // In native Capacitor, we should use the system browser to handle the OAuth flow
+    // so it can redirect back to our custom scheme
+    if (Capacitor.isNativePlatform()) {
+      window.location.href = authUrl;
+      return;
+    }
+
     const authWindow = window.open(
       authUrl,
       'oauth_popup',
